@@ -101,8 +101,8 @@ def test_ffmpeg_render_composes_scene_image_and_video_assets(tmp_path: Path) -> 
         db.execute(
             "INSERT INTO projects VALUES (?, ?, ?, ?, ?)",
             (project_id, "Visual media test", json.dumps({"scenes": [
-                {"id": "image-scene", "title": "Still image", "duration": 1, "assetId": image_id},
-                {"id": "video-scene", "title": "Video clip", "duration": 1, "assetId": video_id},
+                {"id": "image-scene", "title": "Still image", "kind": "Architecture diagram", "duration": 1, "assetId": image_id},
+                {"id": "video-scene", "title": "Video clip", "kind": "Code", "duration": 1, "assetId": video_id},
             ]}), "now", "now"),
         )
         db.executemany(
