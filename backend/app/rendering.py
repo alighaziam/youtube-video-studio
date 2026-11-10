@@ -63,7 +63,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + min(3, duration))},Title,,0,0,0,,{title}")
         narration = str(scene.get("narration") or scene.get("body") or "").strip()
         if narration:
-            sentences = [part.strip() for part in re.split(r"(?<=[.!?؟])\\s+", narration) if part.strip()]
+            sentences = [part.strip() for part in re.split(r"(?<=[.!?؟])\s+", narration) if part.strip()]
             chunks: list[str] = []
             for sentence in sentences or [narration]:
                 words = sentence.split()
@@ -78,7 +78,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 events.append(f"Dialogue: 1,{_ass_time(local_cursor)},{_ass_time(end)},Caption,,0,0,0,,{_ass_escape(chunk)}")
                 local_cursor = end
         cursor += duration
-    return header + "\\n".join(events) + "\\n"
+    return header + "\n".join(events) + "\n"
 
 
 def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: int) -> str:
