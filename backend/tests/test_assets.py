@@ -19,7 +19,7 @@ def test_asset_upload_list_and_delete(tmp_path: Path) -> None:
     )
     assert uploaded.status_code == 201
     asset = uploaded.json()
-    stored = tmp_path / "media" / asset["relative_path"].split("/", 1)[1]
+    stored = tmp_path / "media" / asset["relative_path"]
     assert stored.exists()
     assert client.get(f"/api/v1/projects/{project_id}/assets").json()[0]["name"] == "diagram.png"
     assert client.delete(f"/api/v1/projects/{project_id}/assets/{asset['id']}").status_code == 204
