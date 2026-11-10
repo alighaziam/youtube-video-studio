@@ -22,12 +22,12 @@ Updated: 2026-11-10
 
 - Rendering is still timed text cards on a solid background, not a full composition engine for saved scene layers.
 - The preview remains a sample composition and is not WYSIWYG.
-- Media files can be attached to scenes and image/video assets preview in the stage. The renderer does not yet compose these attachments into the exported MP4; audio attachments are not mixed into output.
+- Media files can be attached to scenes and image/video assets preview in the stage. The renderer does not yet compose image/video attachments into the exported MP4; arbitrary uploaded audio assets are not yet mixed.
 - Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
 - Browser microphone recording, external audio import, waveform editing, trimming, noise reduction and loudness normalization are not implemented. Generated Piper voice-overs are mixed into MP4; arbitrary audio assets are not yet mixed.
 - Subtitle editor, style controls, preview overlay and Persian visual QA are incomplete.
 - Render jobs are in-memory; process restart loses job status. Persistent queue, progress streaming, cancellation and segment retry are not implemented.
-- Undo/redo, crash recovery, version history, templates/brand kit, local Whisper/Piper adapters, and Windows/Linux packaging remain outstanding.
+- Undo/redo, crash recovery, version history, templates/brand kit, local Whisper adapter, and Windows/Linux packaging remain outstanding.
 - Persian glyph shaping still requires visual inspection on a supported machine; no pixel-parity claim is made.
 
 ## Next implementation order
