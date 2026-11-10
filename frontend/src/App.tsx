@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
-type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string };
+type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string };
 type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
-type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
+type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };\ntype Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
 const API = "http://127.0.0.1:8000/api/v1";
 const starterScenes: Scene[] = [
   { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12 },
@@ -32,11 +32,11 @@ export default function App() {
   const [publishingPack, setPublishingPack] = useState("");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetBusy, setAssetBusy] = useState(false);
-  const [assetError, setAssetError] = useState("");
+  const [assetError, setAssetError] = useState("");\n  const [voices, setVoices] = useState<Voice[]>([]);\n  const [voiceId, setVoiceId] = useState("");\n  const [voiceBusy, setVoiceBusy] = useState(false);\n  const [voiceError, setVoiceError] = useState("");
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
-  const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
+  const selectedAsset = assets.find(asset => asset.id === selected?.assetId);\n  const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
 
   useEffect(() => {
     let alive = true;
@@ -101,6 +101,33 @@ export default function App() {
       .catch(reason => { if (alive) setAssetError(reason instanceof Error ? reason.message : "Media library error"); });
     return () => { alive = false; };
   }, [project?.id]);
+
+  useEffect(() => {
+    fetch(`${API}/system/voices`)
+      .then(async response => { if (!response.ok) throw new Error("Could not load local voices"); return response.json(); })
+      .then(result => { setVoices(result.voices ?? []); if (result.voices?.length) setVoiceId(result.voices[0].id); })
+      .catch(reason => setVoiceError(reason instanceof Error ? reason.message : "Voice catalog unavailable"));
+  }, []);
+
+  const generateVoiceovers = async () => {
+    if (!project || !voiceId) return;
+    const eligible = scenes.filter(scene => scene.narration?.trim());
+    if (!eligible.length) { setVoiceError(fa ? "ابتدا برای صحنه‌ها متن گویندگی وارد کن." : "Add narration to scenes first."); return; }
+    setVoiceBusy(true); setVoiceError("");
+    try {
+      const response = await fetch(`${API}/projects/${project.id}/voiceovers`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voice_id: voiceId, scene_ids: eligible.map(scene => scene.id) }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail ?? "Voice generation failed");
+      const mapping = new Map<string, string>(result.generated.map((item: {scene_id:string;asset:{id:string}}) => [item.scene_id, item.asset.id]));
+      setScenes(current => current.map(scene => mapping.has(scene.id) ? { ...scene, voiceAssetId: mapping.get(scene.id) } : scene));
+      const refreshed = await fetch(`${API}/projects/${project.id}/assets`);
+      if (refreshed.ok) setAssets(await refreshed.json());
+    } catch (reason) { setVoiceError(reason instanceof Error ? reason.message : "Voice generation failed"); }
+    finally { setVoiceBusy(false); }
+  };
 
   const uploadAsset = async (file?: File) => {
     if (!project || !file) return;
@@ -203,6 +230,15 @@ export default function App() {
         <div className="heading"><div><small>STORYBOARD</small><h2>{fa ? "صحنه‌های ویدیو" : "Video scenes"} <em>{String(scenes.length).padStart(2,"0")}</em></h2></div><button onClick={addScene}>＋</button></div>
         <textarea className="script-input" value={scriptText} onChange={event=>setScriptText(event.target.value)} placeholder={fa ? "سناریوی درس را اینجا وارد کن؛ هر پاراگراف یک صحنه می‌شود..." : "Paste your lesson script. Each paragraph becomes a scene..."} />
         <button className="add script-button" onClick={generateStoryboard} disabled={scriptBusy || !scriptText.trim()}>{scriptBusy ? (fa ? "در حال ساخت..." : "Generating...") : (fa ? "تبدیل سناریو به استوری‌بورد" : "Generate storyboard from script")}</button>
+        <div className="voice-panel">
+          <div className="media-heading"><b>{fa ? "گویندگی خودکار با صدای محلی" : "Local AI voice-over"}</b><span>{voices.length} {fa ? "صدا" : "voices"}</span></div>
+          <select className="field edit-field" value={voiceId} onChange={event=>setVoiceId(event.target.value)} disabled={!voices.length || voiceBusy}>
+            {voices.length ? voices.map(voice=><option key={voice.id} value={voice.id}>{voice.name}{voice.language ? " · "+voice.language : ""}</option>) : <option value="">{fa ? "صدای محلی نصب نشده" : "No local voices installed"}</option>}
+          </select>
+          <button className="add voice-button" onClick={()=>void generateVoiceovers()} disabled={!voiceId || voiceBusy || !scenes.some(scene=>scene.narration?.trim())}>{voiceBusy ? (fa ? "در حال تولید صدا..." : "Generating voice...") : (fa ? "تولید گویندگی تمام صحنه‌ها" : "Generate all scene voice-overs")}</button>
+          {voiceError && <div className="media-error">{voiceError}</div>}
+          {!voices.length && <small className="media-limit">{fa ? "برای فعال‌سازی Piper و نصب صداهای محلی، راهنمای README را ببین." : "Install Piper and add local voice models; see README."}</small>}
+        </div>
         <div className="media-library">
           <div className="media-heading"><b>{fa ? "کتابخانه رسانه" : "Media library"}</b><span>{assets.length}</span></div>
           <label className="upload-control">{assetBusy ? (fa ? "در حال بارگذاری..." : "Uploading...") : (fa ? "＋ افزودن تصویر / ویدیو / صدا" : "＋ Add image / video / audio")}
@@ -236,7 +272,7 @@ export default function App() {
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>
         <nav>{[["design",fa?"طراحی":"Design"],["motion",fa?"حرکت":"Motion"],["audio",fa?"صدا":"Audio"],["timing",fa?"زمان":"Timing"]].map(([k,v])=><button className={tab===k?"chosen":""} onClick={()=>setTab(k)} key={k}>{v}</button>)}</nav>
-        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}<h3>{fa?"قالب بصری":"Visual style"}</h3><div className="swatches"><i/><i/><i/><i/></div><label>{fa?"پس‌زمینه":"Background"}</label><div className="field">#111827</div><h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Audio settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Audio import and recording are scheduled for the audio milestone.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
+        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"گویندگی این صحنه":"Scene voice-over"}</h3>{selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)}/><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa?"هنوز صدایی برای این صحنه تولید نشده است.":"No generated voice-over for this scene yet."}</p>}<h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}<h3>{fa?"قالب بصری":"Visual style"}</h3><div className="swatches"><i/><i/><i/><i/></div><label>{fa?"پس‌زمینه":"Background"}</label><div className="field">#111827</div><h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Audio settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Audio import and recording are scheduled for the audio milestone.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
         <div className="note">✧ {fa?"حرکت فقط با انتخاب شما اعمال می‌شود؛ محتوای ثابت بدون زوم و پن می‌ماند.":"Motion is opt-in. Static content never auto-zooms or pans."}</div>
       </aside>
     </main>
