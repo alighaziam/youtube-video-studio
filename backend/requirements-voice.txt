@@ -1,0 +1,2 @@
+# Optional local text-to-speech engine. Install only when voice-over generation is needed.
+piper-tts>=1.2.0
