@@ -7,10 +7,10 @@ Updated: 2026-11-10
 | Capability | Status | Notes |
 |---|---|---|
 | React/TypeScript editor shell | Implemented | RTL/LTR switch, scene list, inspector, static preview |
-| Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |\n| Media library | Initial | Project-scoped upload/list/delete, MIME allowlist, 250 MB cap, path confinement |
-| Storyboard editing | Initial | Add scene, select scene, edit title/type/duration; script-to-storyboard API suggests scenes and timings |\n| Publishing pack | Initial | Draft title options, description, chapter timestamps, tags, and thumbnail brief from project scenes |
+| Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |\n| Media library | Backend initial | Project-scoped upload/list/delete API, MIME allowlist, 250 MB cap, path confinement; frontend picker pending |
+| Storyboard editing | Initial | Add scene, select scene, edit title/type/duration; script input in UI calls script-to-storyboard API |\n| Publishing pack | Initial | UI action requests draft title options, description, chapter timestamps, tags, and thumbnail brief |
 | SRT/VTT conversion | Implemented | Import/export endpoints preserve UTF-8 Persian and mixed-script text |\n| Publishing pack | Initial | Draft title options, description, chapters, tags, thumbnail brief |
-| MP4 rendering | Initial | FFmpeg timed title-card render, 16:9 and 9:16, ffprobe dimension validation; CI smoke test renders a real MP4 |
+| MP4 rendering | Initial | UI render controls, FFmpeg timed title-card render, 16:9 and 9:16, ffprobe dimension validation and MP4 download endpoint; CI smoke test renders a real MP4 |
 | FFmpeg capability detection | Implemented | Detect executable, subtitles filter, libx264, ffprobe |
 | CI | Implemented | Backend pytest and frontend TypeScript/Vite build |
 
