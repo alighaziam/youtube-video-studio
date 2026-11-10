@@ -147,7 +147,7 @@ export default function App() {
       const response = await fetch(`${API}/projects/${project.id}/assets/${assetId}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Could not delete asset");
       setAssets(current => current.filter(asset => asset.id !== assetId));
-      setScenes(current => current.map(scene => scene.assetId === assetId ? { ...scene, assetId: undefined } : scene));
+      setScenes(current => current.map(scene => scene.assetId === assetId || scene.voiceAssetId === assetId ? { ...scene, assetId: scene.assetId === assetId ? undefined : scene.assetId, voiceAssetId: scene.voiceAssetId === assetId ? undefined : scene.voiceAssetId } : scene));
     } catch (reason) { setAssetError(reason instanceof Error ? reason.message : "Delete failed"); }
   };
   const assetUrl = (assetId: string) => `${API}/projects/${project?.id}/assets/${assetId}/file`;
@@ -266,7 +266,7 @@ export default function App() {
         </div>}</div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
-        <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><span className="empty-track">{fa ? "هنوز فایلی اضافه نشده" : "No audio added yet"}</span></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
+        <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><div className="wave">{scenes.map(scene=>scene.voiceAssetId ? <i key={scene.id} title={scene.title} style={{height: `${Math.max(5,Math.min(20,scene.duration/2))}px`}}/> : null)}{!scenes.some(scene=>scene.voiceAssetId) && <span className="empty-track">{fa ? "هنوز صدایی تولید نشده" : "No voice-over generated"}</span>}</div></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
         {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
       </section>
       <aside className="inspector">
