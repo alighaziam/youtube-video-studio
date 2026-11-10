@@ -117,6 +117,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 audio_duration = float(json.loads(probe_audio.stdout).get("format", {}).get("duration", 0))
                 scene_duration = max(scene_duration, int(audio_duration + 0.999))
                 voice_inputs.append((voice_path, elapsed * 1000))
+            scene["duration"] = scene_duration
             elapsed += scene_duration
         total_duration = elapsed
         with tempfile.TemporaryDirectory(prefix="framelab-render-") as temp:
