@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/assets", tags=["assets"])
 ALLOWED_TYPES = {
@@ -111,3 +112,22 @@ def delete_asset(project_id: str, asset_id: str, request: Request) -> None:
             raise HTTPException(status_code=400, detail="Invalid asset path")
         db.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
     path.unlink(missing_ok=True)
+
+
+
+@router.get("/{asset_id}/file")
+def get_asset_file(project_id: str, asset_id: str, request: Request) -> FileResponse:
+    db_path = _asset_db(request)
+    with sqlite3.connect(db_path) as db:
+        _ensure_table(db)
+        row = db.execute(
+            "SELECT original_name, mime_type, relative_path FROM assets WHERE id = ? AND project_id = ?",
+            (asset_id, project_id),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    base_dir = Path(getattr(request.app.state, "assets_dir", Path(".data/assets"))).resolve()
+    path = (base_dir / row[2]).resolve()
+    if base_dir not in path.parents or not path.is_file():
+        raise HTTPException(status_code=404, detail="Asset file not found")
+    return FileResponse(path, media_type=row[1], filename=row[0])
