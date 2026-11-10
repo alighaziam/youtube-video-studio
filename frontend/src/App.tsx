@@ -36,6 +36,7 @@ export default function App() {
   const [assetError, setAssetError] = useState("");
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voiceId, setVoiceId] = useState("");
+  const [voiceEngineAvailable, setVoiceEngineAvailable] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const fa = locale === "fa";
@@ -111,12 +112,12 @@ export default function App() {
   useEffect(() => {
     fetch(`${API}/system/voices`)
       .then(async response => { if (!response.ok) throw new Error("Could not load local voices"); return response.json(); })
-      .then(result => { setVoices(result.voices ?? []); if (result.voices?.length) setVoiceId(result.voices[0].id); })
+      .then(result => { setVoices(result.voices ?? []); setVoiceEngineAvailable(Boolean(result.available)); if (result.voices?.length) setVoiceId(result.voices[0].id); })
       .catch(reason => setVoiceError(reason instanceof Error ? reason.message : "Voice catalog unavailable"));
   }, []);
 
   const generateVoiceovers = async () => {
-    if (!project || !voiceId || voiceBusy) return;
+    if (!project || !voiceId || !voiceEngineAvailable || voiceBusy) return;
     setVoiceBusy(true); setVoiceError(""); setRenderMessage(""); setRenderDownloadUrl("");
     try {
       let workingScenes = scenes;
@@ -272,9 +273,9 @@ export default function App() {
           <select className="field edit-field" value={voiceId} onChange={event=>setVoiceId(event.target.value)} disabled={!voices.length || voiceBusy}>
             {voices.length ? voices.map(voice=><option key={voice.id} value={voice.id}>{voice.name}{voice.language ? " · "+voice.language : ""}</option>) : <option value="">{fa ? "صدای محلی نصب نشده" : "No local voices installed"}</option>}
           </select>
-          <button className="add voice-button" onClick={()=>void generateVoiceovers()} disabled={!voiceId || voiceBusy || renderState === "queued" || renderState === "running" || (!scriptText.trim() && !scenes.some(scene=>scene.narration?.trim()))}>{voiceBusy ? (fa ? "در حال تولید صدا و رندر ویدیو..." : "Generating voice and rendering video...") : (fa ? "تولید خودکار ویدیو تا MP4 نهایی" : "Produce video automatically to final MP4")}</button>
+          <button className="add voice-button" onClick={()=>void generateVoiceovers()} disabled={!voiceId || !voiceEngineAvailable || voiceBusy || renderState === "queued" || renderState === "running" || (!scriptText.trim() && !scenes.some(scene=>scene.narration?.trim()))}>{voiceBusy ? (fa ? "در حال تولید صدا و رندر ویدیو..." : "Generating voice and rendering video...") : (fa ? "تولید خودکار ویدیو تا MP4 نهایی" : "Produce video automatically to final MP4")}</button>
           {voiceError && <div className="media-error">{voiceError}</div>}
-          {!voices.length && <small className="media-limit">{fa ? "برای فعال‌سازی Piper و نصب صداهای محلی، راهنمای README را ببین." : "Install Piper and add local voice models; see README."}</small>}
+          {(!voices.length || !voiceEngineAvailable) && <small className="media-limit">{!voiceEngineAvailable ? (fa ? "موتور Piper نصب یا در PATH پیدا نشده است؛ راهنمای نصب را ببین." : "Piper is not installed or not available on PATH; see setup guide.") : (fa ? "مدل صدای محلی نصب نشده است؛ راهنمای نصب را ببین." : "No local voice models installed; see setup guide.")}</small>}
         </div>
         <div className="media-library">
           <div className="media-heading"><b>{fa ? "کتابخانه رسانه" : "Media library"}</b><span>{assets.length}</span></div>
