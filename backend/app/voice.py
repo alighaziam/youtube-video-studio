@@ -44,7 +44,7 @@ def _voice_catalog(directory: Path) -> list[dict[str, Any]]:
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 metadata = {}
-        language = metadata.get(" language", metadata.get("language", {}))
+        language = metadata.get("language", {})
         if isinstance(language, dict):
             language = language.get("name", language.get("code", ""))
         voices.append({
