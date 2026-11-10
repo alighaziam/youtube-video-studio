@@ -65,6 +65,47 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return header + "\n".join(events) + "\n"
 
 
+def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: int) -> str:
+    filters = [
+        f"scale={width}:{height}:force_original_aspect_ratio=increase",
+        f"crop={width}:{height}", "setsar=1", f"fps={fps}", "format=yuv420p",
+    ]
+    kind = str(scene.get("kind", "Concept")).lower()
+    if "architecture" in kind or "diagram" in kind or "معماری" in kind or "دیاگرام" in kind:
+        node_w, node_h = int(width * .19), int(height * .13)
+        y = int(height * .43)
+        xs = [int(width * .09), int(width * .405), int(width * .72)]
+        for x in xs:
+            filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x6478f5@0.28:t=fill")
+            filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x91a4ff@0.9:t=3")
+        filters.extend([
+            f"drawbox=x={xs[0]+node_w}:y={y+node_h//2-3}:w={xs[1]-xs[0]-node_w}:h=6:color=0x91a4ff@0.85:t=fill",
+            f"drawbox=x={xs[1]+node_w}:y={y+node_h//2-3}:w={xs[2]-xs[1]-node_w}:h=6:color=0x91a4ff@0.85:t=fill",
+        ])
+    elif "code" in kind or "کد" in kind:
+        x, y, w, h = int(width * .12), int(height * .2), int(width * .76), int(height * .6)
+        filters.append(f"drawbox=x={x}:y={y}:w={w}:h={h}:color=0x0b1220@0.92:t=fill")
+        filters.append(f"drawbox=x={x}:y={y}:w={w}:h={int(height*.055)}:color=0x27334a@0.95:t=fill")
+        for index, fraction in enumerate((.53, .72, .61, .82, .44, .68, .57)):
+            line_y = y + int(height * (.13 + index * .065))
+            line_w = int(w * fraction)
+            line_color = ("78a9ff", "6ed6c1", "9aa8c4")[index % 3]
+            filters.append(f"drawbox=x={x+int(w*.06)}:y={line_y}:w={line_w}:h={max(5,int(height*.009))}:color=0x{line_color}@0.72:t=fill")
+    elif "comparison" in kind or "مقایسه" in kind:
+        x1, x2, y, w, h = int(width*.1), int(width*.54), int(height*.27), int(width*.36), int(height*.46)
+        filters.append(f"drawbox=x={x1}:y={y}:w={w}:h={h}:color=0x315b86@0.25:t=fill")
+        filters.append(f"drawbox=x={x1}:y={y}:w={w}:h={h}:color=0x5ca7ed@0.85:t=3")
+        filters.append(f"drawbox=x={x2}:y={y}:w={w}:h={h}:color=0x62508d@0.25:t=fill")
+        filters.append(f"drawbox=x={x2}:y={y}:w={w}:h={h}:color=0xa58bf2@0.85:t=3")
+    else:
+        filters.extend([
+            f"drawbox=x=0:y=0:w={int(width*.012)}:h={height}:color=0x7187ff@0.9:t=fill",
+            f"drawbox=x={int(width*.08)}:y={int(height*.16)}:w={int(width*.84)}:h={int(height*.006)}:color=0x7187ff@0.48:t=fill",
+            f"drawbox=x={int(width*.08)}:y={int(height*.84)}:w={int(width*.84)}:h={int(height*.004)}:color=0x7187ff@0.3:t=fill",
+        ])
+    return ",".join(filters)
+
+
 def _set_job(job_id: str, **values: Any) -> None:
     with _jobs_lock:
         _jobs[job_id].update(values)
@@ -150,7 +191,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 scene_command = [
                     ffmpeg, "-y", "-hide_banner", "-loglevel", "error", *input_args,
                     "-t", str(duration),
-                    "-vf", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps={fps},format=yuv420p",
+                    "-vf", _scene_visual_filter(scenes[index], width, height, fps),
                     "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
                     "-pix_fmt", "yuv420p", "-r", str(fps), str(segment),
                 ]
