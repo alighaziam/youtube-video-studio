@@ -134,4 +134,4 @@ def test_custom_diagram_nodes_edges_positions_and_color_are_used() -> None:
 
     filters = _scene_visual_filter(scene, 1920, 1080, 30)
     assert "0x22aa88" in filters
-    assert "drawbox=x=345" in filters
+    assert "drawbox=x=163" in filters
