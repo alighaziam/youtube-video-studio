@@ -32,7 +32,7 @@ Updated: 2026-11-10
 
 ## Next implementation order
 
-1. Add a multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom; expose semantic diagram nodes and labels as editable scene properties.
+1. Expand the editable diagram layer into a true multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom.
 2. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
 3. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
 4. Complete caption editing, styling, overlay preview and verified Persian shaping.
@@ -49,3 +49,12 @@ A phase is not complete merely because files are committed. It needs passing aut
 - The renderer selects labeled diagrams for event-driven messaging, API gateway routing, database access, modular monolith boundaries, microservices and authentication/request sequences.
 - Diagram nodes and edge labels are rendered as static ASS text over FFmpeg vector geometry in both landscape and portrait profiles. Code and comparison scenes retain dedicated templates.
 - No network request, paid API, generated stock art, zoom or pan is used. Semantic selection and layout need local runtime tests and visual review before being treated as production-verified.
+
+
+## Editable diagram layer (2026-11-10)
+
+- Each scene can store its own diagram model in the project document: node IDs, labels, X/Y percentage positions, edge labels and accent color.
+- The inspector supports editing node text, moving nodes numerically, changing connection labels and accent color, adding/removing nodes, and resetting to the suggested semantic diagram.
+- The editor preview reads the same saved scene diagram model. The FFmpeg renderer consumes that model for node positions, labels, connectors and accent color.
+- Custom diagram data is bounded and sanitized on the rendering side (maximum 12 nodes, bounded coordinates and validated hex color). The feature remains static: no automatic zoom or pan.
+- Automated tests were added for custom diagram labels, positions, edge text and color. Runtime execution and visual QA remain pending while GitHub Actions startup failures persist.
