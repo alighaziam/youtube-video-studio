@@ -159,7 +159,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                     raise RuntimeError(rendered.stderr.strip() or f"Could not render scene {index + 1}.")
                 segment_paths.append(segment)
             concat_file = temp_dir / "scenes.txt"
-            concat_file.write_text("".join(f"file '{path.as_posix()}'\\n" for path in segment_paths), encoding="utf-8")
+            concat_file.write_text("".join(f"file '{path.as_posix()}'\n" for path in segment_paths), encoding="utf-8")
             base_video = temp_dir / "base-video.mp4"
             joined = subprocess.run(
                 [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
