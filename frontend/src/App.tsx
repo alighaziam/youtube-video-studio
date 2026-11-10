@@ -13,6 +13,21 @@ const starterScenes: Scene[] = [
   { id: "scene-05", title: "Trade-offs and recap", kind: "جمع‌بندی", duration: 25 },
 ];
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+const getSceneDiagramLabels = (scene?: Scene): string[] => {
+  if (!scene) return ["CLIENT", "API", "DATA"];
+  const kind = scene.kind.toLowerCase();
+  const text = [scene.title, scene.narration ?? "", scene.kind].join(" ").toLowerCase();
+  if (kind.includes("code") || kind.includes("کد")) return ["INPUT", "VALIDATE", "OUTPUT"];
+  if (kind.includes("comparison") || kind.includes("مقایسه") || /trade.?off| versus | vs |در مقابل/.test(text)) return ["OPTION A", "OPTION B"];
+  if (/event.?driven|kafka|rabbitmq|message broker|رویدادمحور|رویداد محور|بروکر/.test(text)) return ["PRODUCER", "BROKER", "CONSUMER"];
+  if (/api gateway|gateway|گیت.?وی|درگاه api/.test(text)) return ["CLIENT", "API GATEWAY", "SERVICES", "DATA"];
+  if (/modular monolith|ماژولار مونولیت|مونولیت ماژولار/.test(text)) return ["API", "ORDERS", "CATALOG", "SHARED DB"];
+  if (/microservices|microservice|میکروسرویس|میکرو سرویس/.test(text)) return ["API GATEWAY", "ORDER SVC", "CATALOG SVC", "DATABASES"];
+  if (/sequence diagram|request flow|authentication|oauth|login flow|احراز هویت|ورود کاربر/.test(text)) return ["CLIENT", "IDENTITY", "TOKEN", "API"];
+  if (/database|postgres|mysql|دیتابیس|پایگاه داده/.test(text)) return ["CLIENT", "API", "DATABASE"];
+  return ["CLIENT", "API", "DATA"];
+};
+
 
 export default function App() {
   const [active, setActive] = useState("scene-03");
@@ -306,7 +321,7 @@ export default function App() {
         <div className="stage">{selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="attached-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}<small>{selectedAsset.name}</small></div> : <div className="slide">
           <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
           <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
-          <div className="diagram">{(selected?.kind.toLowerCase().includes("comparison") ? ["OPTION A","OPTION B"] : selected?.kind.toLowerCase().includes("code") ? ["INPUT","VALIDATE","OUTPUT"] : ["CLIENT","API","DATA"]).map((label,index)=><div key={label} className={index===1?"focus":""}>{label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
+          <div className="diagram">{getSceneDiagramLabels(selected).map((label,index)=><div key={label} className={index===1?"focus":""}>{label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
           <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
         </div>}</div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
