@@ -25,12 +25,11 @@ The product is designed for creators who want professional motion-slide videos w
 
 1. Create a YouTube 16:9 or Shorts 9:16 project.
 2. Write a lesson script and split it into scenes.
-3. Design slides, code panels, and editable architecture diagrams.
-4. Record/import narration or optionally use local TTS.
-5. Create and edit Persian/English subtitles.
-6. Arrange scenes, audio, and captions.
-7. Render MP4 locally and validate the output.
-8. Export an editable YouTube publishing pack.
+3. Optionally attach an image/video to each scene; automatic static layouts are provided for concept, code, comparison and architecture scenes.
+4. Select an installed Piper voice and generate local narration for all scenes.
+5. Generate readable timed caption chunks automatically.
+6. Render MP4 locally with scene visuals and narration, then validate the output.
+7. Export an editable YouTube publishing pack.
 
 ## Documentation
 
@@ -54,11 +53,11 @@ The editor can generate per-scene narration locally with Piper, list installed v
 
 ## Project status
 
-Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The first working vertical slice is implemented: React editor shell with editable storyboard scenes and debounced autosave, FastAPI project CRUD backed by SQLite, SRT/VTT caption import/export, and an asynchronous FFmpeg text-scene MP4 render endpoint for landscape and Shorts profiles. The renderer currently creates timed title cards on a dark background; it is not yet the full layer compositor. Project media upload and local Piper voice-over generation are now available as an initial vertical slice, and generated narration is mixed into MP4 renders. Rich image/video/code/diagram composition, full timeline editing, arbitrary audio recording/import/waveform editing, local speech-to-text, transitions, render cancellation/progress streaming, and production-grade publishing automation remain open.
+Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The current vertical slice includes editable storyboard scenes, SQLite persistence, media upload, optional local Piper narration, FFmpeg scene composition for attached images/videos, static code/architecture/comparison templates, timed sentence-level captions, 16:9 and 9:16 rendering, output validation and a one-action script-to-MP4 flow when Piper is installed. This is not yet a full multi-layer editor: precise word-level subtitle alignment, Persian visual QA, arbitrary audio import/mixing, timeline editing, generated illustrative artwork, persistent render queues, cancellation/progress streaming, and production-grade publishing automation remain open.
 
 ## Run locally
 
-Requirements: Python 3.11+, Node.js 20+, npm. FFmpeg is optional for this current project/storyboard milestone and will be required for media rendering.
+Requirements: Python 3.11+, Node.js 20+, npm and FFmpeg/ffprobe. Piper plus at least one licensed local voice model is optional and required only for one-action voice production.
 
 Linux:
 ```bash
