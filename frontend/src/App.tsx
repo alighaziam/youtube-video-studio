@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 type DiagramNode = { id: string; label: string; x: number; y: number };
 type DiagramEdge = { label: string };
 type SceneDiagram = { nodes: DiagramNode[]; edges: DiagramEdge[]; accentColor?: string };
-type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string; diagram?: SceneDiagram };
+type SceneLayer = { id: string; type: "image" | "video" | "text" | "code" | "diagram"; name: string; x: number; y: number; width: number; height: number; zIndex: number; opacity: number; visible: boolean; content?: string; assetId?: string };
+type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string; diagram?: SceneDiagram; layers?: SceneLayer[] };
 type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
 type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
 type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
@@ -235,6 +236,32 @@ export default function App() {
   const updateDiagramNode = (index: number, patch: Partial<DiagramNode>) => updateDiagram({ nodes: selectedDiagram.nodes.map((node, nodeIndex) => nodeIndex === index ? { ...node, ...patch } : node) });
   const updateDiagramEdge = (index: number, label: string) => updateDiagram({ edges: selectedDiagram.edges.map((edge, edgeIndex) => edgeIndex === index ? { ...edge, label } : edge) });
   const resetDiagram = () => updateSelected({ diagram: makeDefaultDiagram(selected) });
+  const addLayer = (type: SceneLayer["type"]) => {
+    if (!selected) return;
+    const count = (selected.layers ?? []).length;
+    const layer: SceneLayer = {
+      id: `layer-${crypto.randomUUID()}`, type,
+      name: type === "image" ? "Image layer" : type === "video" ? "Video layer" : type === "code" ? "Code layer" : type === "diagram" ? "Diagram layer" : "Text layer",
+      x: 12 + (count % 3) * 8, y: 16 + (count % 3) * 8, width: 42, height: 28,
+      zIndex: count + 1, opacity: 1, visible: true,
+      content: type === "code" ? "public void handle() {\\n  // your code\\n}" : type === "diagram" ? "CLIENT → API → DATA" : type === "text" ? "Your text" : undefined,
+    };
+    updateSelected({ layers: [...(selected.layers ?? []), layer] });
+  };
+  const updateLayer = (id: string, patch: Partial<SceneLayer>) => {
+    if (!selected) return;
+    updateSelected({ layers: (selected.layers ?? []).map(layer => layer.id === id ? { ...layer, ...patch } : layer) });
+  };
+  const moveLayer = (id: string, direction: -1 | 1) => {
+    if (!selected) return;
+    const ordered = [...(selected.layers ?? [])].sort((a,b) => a.zIndex - b.zIndex);
+    const index = ordered.findIndex(layer => layer.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= ordered.length) return;
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    updateSelected({ layers: ordered.map((layer, order) => ({ ...layer, zIndex: order + 1 })) });
+  };
+  const deleteLayer = (id: string) => updateSelected({ layers: (selected?.layers ?? []).filter(layer => layer.id !== id) });
   const addDiagramNode = () => {
     const index = selectedDiagram.nodes.length;
     const nodes = [...selectedDiagram.nodes, { id: `node-${crypto.randomUUID()}`, label: `NODE ${index + 1}`, x: 12 + (index % 4) * 25, y: 48 + Math.floor(index / 4) * 22 }];
@@ -343,12 +370,23 @@ export default function App() {
       </section>
       <section className="editor">
         <div className="editor-head"><div><small>SCENE PREVIEW</small><b>{selected?.title}</b></div><span>16:9　　100%</span></div>
-        <div className="stage">{selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="attached-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}<small>{selectedAsset.name}</small></div> : <div className="slide">
-          <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
-          <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
-          <div className="diagram editor-diagram" style={{"--diagram-accent":selectedDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{selectedDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
-          <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
-        </div>}</div>
+        <div className="stage"><div className="canvas-stage">
+          {selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="canvas-base-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}</div> : <div className="slide">
+            <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
+            <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
+            <div className="diagram editor-diagram" style={{"--diagram-accent":selectedDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{selectedDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
+            <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
+          </div>}
+          {(selected?.layers ?? []).filter(layer=>layer.visible).sort((a,b)=>a.zIndex-b.zIndex).map(layer => {
+            const layerAsset = layer.assetId ? assets.find(asset=>asset.id===layer.assetId) : undefined;
+            return <div key={layer.id} className={`canvas-layer layer-${layer.type}`} style={{left:`${layer.x}%`,top:`${layer.y}%`,width:`${layer.width}%`,height:`${layer.height}%`,opacity:layer.opacity,zIndex:layer.zIndex}}>
+              {(layer.type==="image" || layer.type==="video") && layerAsset ? (layer.type==="image" ? <img src={assetUrl(layerAsset.id)} alt={layer.name}/> : <video src={assetUrl(layerAsset.id)} muted playsInline/>) : null}
+              {layer.type==="text" && <span>{layer.content}</span>}
+              {layer.type==="code" && <pre>{layer.content}</pre>}
+              {layer.type==="diagram" && <span className="layer-diagram">{layer.content}</span>}
+            </div>;
+          })}
+        </div></div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
         <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><div className="wave">{scenes.map(scene=>scene.voiceAssetId ? <i key={scene.id} title={scene.title} style={{height: `${Math.max(5,Math.min(20,scene.duration/2))}px`}}/> : null)}{!scenes.some(scene=>scene.voiceAssetId) && <span className="empty-track">{fa ? "هنوز صدایی تولید نشده" : "No voice-over generated"}</span>}</div></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
@@ -366,7 +404,26 @@ export default function App() {
             {index<selectedDiagram.nodes.length-1 && <label>{fa?"برچسب ارتباط":"Connection label"}<input className="field edit-field" value={selectedDiagram.edges[index]?.label ?? ""} onChange={event=>updateDiagramEdge(index,event.target.value)}/></label>}
           </div>)}
           <button className="diagram-add" type="button" onClick={addDiagramNode}>{fa?"＋ افزودن گره":"＋ Add node"}</button>
-          <h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Voice-over settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Choose a local Piper voice in the script panel and generate narration for every scene.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
+          <h3>{fa?"بوم چندلایه":"Multi-layer canvas"}</h3>
+          <div className="layer-add-grid">
+            <button type="button" onClick={()=>addLayer("text")}>＋ {fa?"متن":"Text"}</button>
+            <button type="button" onClick={()=>addLayer("code")}>＋ Code</button>
+            <button type="button" onClick={()=>addLayer("diagram")}>＋ {fa?"دیاگرام":"Diagram"}</button>
+            <button type="button" onClick={()=>addLayer("image")}>＋ {fa?"تصویر":"Image"}</button>
+            <button type="button" onClick={()=>addLayer("video")}>＋ Video</button>
+          </div>
+          {(selected?.layers ?? []).slice().sort((a,b)=>b.zIndex-a.zIndex).map(layer=><div className="canvas-layer-editor" key={layer.id}>
+            <div className="canvas-layer-heading"><b>{layer.name}</b><span>Z {layer.zIndex}</span><button type="button" onClick={()=>moveLayer(layer.id,1)} title="Move forward">↑</button><button type="button" onClick={()=>moveLayer(layer.id,-1)} title="Move backward">↓</button><button type="button" onClick={()=>updateLayer(layer.id,{visible:!layer.visible})}>{layer.visible?"◉":"○"}</button><button type="button" onClick={()=>deleteLayer(layer.id)}>×</button></div>
+            {(layer.type==="text" || layer.type==="code" || layer.type==="diagram") && <textarea className="field edit-field layer-content" value={layer.content ?? ""} onChange={event=>updateLayer(layer.id,{content:event.target.value})}/>}
+            {(layer.type==="image" || layer.type==="video") && <select className="field edit-field" value={layer.assetId ?? ""} onChange={event=>updateLayer(layer.id,{assetId:event.target.value || undefined})}><option value="">{fa?"انتخاب فایل رسانه":"Choose media asset"}</option>{assets.filter(asset=>layer.type==="image"?asset.mime_type.startsWith("image/"):asset.mime_type.startsWith("video/")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>}
+            <div className="layer-transform-grid">
+              <label>X % <input className="field edit-field" type="number" min="0" max="100" value={layer.x} onChange={event=>updateLayer(layer.id,{x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label>
+              <label>Y % <input className="field edit-field" type="number" min="0" max="100" value={layer.y} onChange={event=>updateLayer(layer.id,{y:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label>
+              <label>W % <input className="field edit-field" type="number" min="1" max="100" value={layer.width} onChange={event=>updateLayer(layer.id,{width:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label>
+              <label>H % <input className="field edit-field" type="number" min="1" max="100" value={layer.height} onChange={event=>updateLayer(layer.id,{height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label>
+            </div>
+            <label className="layer-opacity">Opacity · {Math.round(layer.opacity*100)}% <input type="range" min="0" max="100" value={Math.round(layer.opacity*100)} onChange={event=>updateLayer(layer.id,{opacity:Number(event.target.value)/100})}/></label>
+          </div>)}</>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Voice-over settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Choose a local Piper voice in the script panel and generate narration for every scene.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
         <div className="note">✧ {fa?"حرکت فقط با انتخاب شما اعمال می‌شود؛ محتوای ثابت بدون زوم و پن می‌ماند.":"Motion is opt-in. Static content never auto-zooms or pans."}</div>
       </aside>
     </main>
