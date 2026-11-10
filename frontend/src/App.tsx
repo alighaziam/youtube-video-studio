@@ -369,8 +369,8 @@ export default function App() {
         <div className="hint">✧ {fa ? "تغییرات استوری‌بورد به‌صورت خودکار در پایگاه داده محلی ذخیره می‌شود." : "Storyboard changes are autosaved to your local database."}</div>
       </section>
       <section className="editor">
-        <div className="editor-head"><div><small>SCENE PREVIEW</small><b>{selected?.title}</b></div><span>16:9　　100%</span></div>
-        <div className="stage"><div className="canvas-stage">
+        <div className="editor-head"><div><small>SCENE PREVIEW</small><b>{selected?.title}</b></div><span>{renderProfile === "shorts-1080p" ? "9:16" : "16:9"}　　100%</span></div>
+        <div className="stage"><div className="canvas-stage" style={renderProfile === "shorts-1080p" ? { aspectRatio: "9 / 16", width: "auto", height: "min(620px, 70vh)" } : { aspectRatio: "16 / 9" }}>
           {selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="canvas-base-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}</div> : <div className="slide">
             <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
             <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
