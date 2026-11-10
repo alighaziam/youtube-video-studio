@@ -116,23 +116,54 @@ export default function App() {
   }, []);
 
   const generateVoiceovers = async () => {
-    if (!project || !voiceId) return;
-    const eligible = scenes.filter(scene => scene.narration?.trim());
-    if (!eligible.length) { setVoiceError(fa ? "ابتدا برای صحنه‌ها متن گویندگی وارد کن." : "Add narration to scenes first."); return; }
-    setVoiceBusy(true); setVoiceError("");
+    if (!project || !voiceId || voiceBusy) return;
+    setVoiceBusy(true); setVoiceError(""); setRenderMessage(""); setRenderDownloadUrl("");
     try {
-      const response = await fetch(`${API}/projects/${project.id}/voiceovers`, {
+      let workingScenes = scenes;
+      if (scriptText.trim()) {
+        const storyboardResponse = await fetch(`${API}/storyboard/from-script`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: project.title, script: scriptText, language: locale, words_per_minute: 130 }),
+        });
+        const storyboard = await storyboardResponse.json();
+        if (!storyboardResponse.ok) throw new Error(storyboard.detail ?? "Storyboard generation failed");
+        workingScenes = storyboard.scenes.map((scene: Scene) => ({
+          id: scene.id, title: scene.title, kind: scene.kind, duration: scene.duration, narration: scene.narration,
+        }));
+        setScenes(workingScenes);
+        if (workingScenes.length) setActive(workingScenes[0].id);
+      }
+      const eligible = workingScenes.filter(scene => scene.narration?.trim());
+      if (!eligible.length) throw new Error(fa ? "ابتدا متن سناریو یا متن گویندگی صحنه‌ها را وارد کن." : "Enter a script or scene narration first.");
+      const voiceResponse = await fetch(`${API}/projects/${project.id}/voiceovers`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ voice_id: voiceId, scene_ids: eligible.map(scene => scene.id) }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail ?? "Voice generation failed");
-      const mapping = new Map<string, string>(result.generated.map((item: {scene_id:string;asset:{id:string}}) => [item.scene_id, item.asset.id]));
-      setScenes(current => current.map(scene => mapping.has(scene.id) ? { ...scene, voiceAssetId: mapping.get(scene.id) } : scene));
+      const voiceResult = await voiceResponse.json();
+      if (!voiceResponse.ok) throw new Error(voiceResult.detail ?? "Voice generation failed");
+      const mapping = new Map<string, string>(voiceResult.generated.map((item: {scene_id:string;asset:{id:string}}) => [item.scene_id, item.asset.id]));
+      const finalScenes = workingScenes.map(scene => mapping.has(scene.id) ? { ...scene, voiceAssetId: mapping.get(scene.id) } : scene);
+      setScenes(finalScenes);
+      const saveResponse = await fetch(`${API}/projects/${project.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: { ...project.document, scenes: finalScenes } }),
+      });
+      if (!saveResponse.ok) throw new Error("Could not save generated narration to the project.");
       const refreshed = await fetch(`${API}/projects/${project.id}/assets`);
       if (refreshed.ok) setAssets(await refreshed.json());
-    } catch (reason) { setVoiceError(reason instanceof Error ? reason.message : "Voice generation failed"); }
-    finally { setVoiceBusy(false); }
+      setScriptText("");
+      setRenderState("queued");
+      const renderResponse = await fetch(`${API}/projects/${project.id}/renders`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: renderProfile, fps: 30 }),
+      });
+      const renderResult = await renderResponse.json();
+      if (!renderResponse.ok) throw new Error(renderResult.detail ?? "Final MP4 render could not start.");
+      setRenderJobId(renderResult.job_id);
+    } catch (reason) {
+      setRenderState("failed");
+      setVoiceError(reason instanceof Error ? reason.message : "Automatic video production failed");
+    } finally { setVoiceBusy(false); }
   };
 
   const uploadAsset = async (file?: File) => {
@@ -241,7 +272,7 @@ export default function App() {
           <select className="field edit-field" value={voiceId} onChange={event=>setVoiceId(event.target.value)} disabled={!voices.length || voiceBusy}>
             {voices.length ? voices.map(voice=><option key={voice.id} value={voice.id}>{voice.name}{voice.language ? " · "+voice.language : ""}</option>) : <option value="">{fa ? "صدای محلی نصب نشده" : "No local voices installed"}</option>}
           </select>
-          <button className="add voice-button" onClick={()=>void generateVoiceovers()} disabled={!voiceId || voiceBusy || !scenes.some(scene=>scene.narration?.trim())}>{voiceBusy ? (fa ? "در حال تولید صدا..." : "Generating voice...") : (fa ? "تولید گویندگی تمام صحنه‌ها" : "Generate all scene voice-overs")}</button>
+          <button className="add voice-button" onClick={()=>void generateVoiceovers()} disabled={!voiceId || voiceBusy || renderState === "queued" || renderState === "running" || (!scriptText.trim() && !scenes.some(scene=>scene.narration?.trim()))}>{voiceBusy ? (fa ? "در حال تولید صدا و رندر ویدیو..." : "Generating voice and rendering video...") : (fa ? "تولید خودکار ویدیو تا MP4 نهایی" : "Produce video automatically to final MP4")}</button>
           {voiceError && <div className="media-error">{voiceError}</div>}
           {!voices.length && <small className="media-limit">{fa ? "برای فعال‌سازی Piper و نصب صداهای محلی، راهنمای README را ببین." : "Install Piper and add local voice models; see README."}</small>}
         </div>
