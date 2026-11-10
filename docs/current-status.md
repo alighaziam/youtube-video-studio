@@ -21,7 +21,7 @@ Updated: 2026-11-10
 ## Known limitations
 
 - Rendering composes one attached image/video as each scene's visual background and adds static template geometry for architecture, code and comparison scene types. It is not yet a multi-layer canvas compositor.
-- The preview remains a sample composition and is not WYSIWYG.
+- The preview reflects the selected scene title, narration, type and attached media, but it is not pixel-identical to the final FFmpeg render.
 - Scene image/video attachments are composed into the exported MP4 with contain-to-fill crop. Arbitrary uploaded audio assets are not yet mixed; only generated voice-over clips are mixed.
 - Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
 - Browser microphone recording, external audio import, waveform editing, trimming, noise reduction and loudness normalization are not implemented. Generated Piper voice-overs are mixed into MP4; arbitrary audio assets are not yet mixed.
