@@ -27,6 +27,53 @@ class RenderRequest(BaseModel):
     fps: int = Field(default=30, ge=24, le=60)
 
 
+def _normalize_scene_layers(raw_layers: Any) -> list[dict[str, Any]]:
+    """Validate and normalize a persisted layer stack."""
+    if not isinstance(raw_layers, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    allowed = {"image", "video", "text", "code", "diagram"}
+    for index, raw in enumerate(raw_layers[:24]):
+        if not isinstance(raw, dict) or raw.get("type") not in allowed:
+            continue
+        def number(key: str, default: float, low: float, high: float) -> float:
+            try:
+                value = float(raw.get(key, default))
+            except (TypeError, ValueError):
+                value = default
+            return max(low, min(high, value))
+        normalized.append({
+            "id": str(raw.get("id", f"layer-{index + 1}"))[:80],
+            "type": raw["type"], "name": str(raw.get("name", raw["type"]))[:80],
+            "x": number("x", 0, 0, 100), "y": number("y", 0, 0, 100),
+            "width": number("width", 40, 1, 100), "height": number("height", 25, 1, 100),
+            "zIndex": int(number("zIndex", index + 1, 0, 1000)),
+            "opacity": number("opacity", 1, 0, 1), "visible": bool(raw.get("visible", True)),
+            "content": str(raw.get("content", ""))[:6000], "assetId": str(raw.get("assetId", ""))[:128],
+        })
+    return sorted(normalized, key=lambda item: item["zIndex"])
+
+
+def _scene_layer_filter(scene: dict[str, Any], width: int, height: int, fps: int,
+                        media_layers: list[tuple[dict[str, Any], Path]]) -> tuple[str, str]:
+    """Build an FFmpeg graph for visible image/video layers in z-order."""
+    graph = [f"[0:v]{_scene_visual_filter(scene, width, height, fps)}[base]"]
+    current = "base"
+    for index, (layer, _path) in enumerate(media_layers, start=1):
+        layer_w = max(2, int(width * layer["width"] / 100))
+        layer_h = max(2, int(height * layer["height"] / 100))
+        x = max(0, min(width - layer_w, int(width * layer["x"] / 100)))
+        y = max(0, min(height - layer_h, int(height * layer["y"] / 100)))
+        prepared = f"layer{index}"
+        output = "vout" if index == len(media_layers) else f"composite{index}"
+        graph.append(f"[{index}:v]scale={layer_w}:{layer_h}:force_original_aspect_ratio=decrease,pad={layer_w}:{layer_h}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba,colorchannelmixer=aa={layer['opacity']}[{prepared}]")
+        graph.append(f"[{current}][{prepared}]overlay=x={x}:y={y}:shortest=1:format=auto[{output}]")
+        current = output
+    if not media_layers:
+        return _scene_visual_filter(scene, width, height, fps), "0:v:0"
+    return ";".join(graph), "[vout]"
+
+
 def _ass_time(seconds: float) -> str:
     centiseconds = round(seconds * 100)
     hours, rest = divmod(centiseconds, 360000)
