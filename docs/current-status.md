@@ -2,37 +2,41 @@
 
 Updated: 2026-11-10
 
-## Implemented in the repository
+## Implemented
 
 | Capability | Status | Notes |
 |---|---|---|
-| React/TypeScript editor shell | Implemented | RTL/LTR switch, scene list, inspector, static preview |
-| Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |\n| Media library | Backend initial | Project-scoped upload/list/delete API, MIME allowlist, 250 MB cap, path confinement; frontend picker pending |
-| Storyboard editing | Initial | Add scene, select scene, edit title/type/duration; script input in UI calls script-to-storyboard API |\n| Publishing pack | Initial | UI action requests draft title options, description, chapter timestamps, tags, and thumbnail brief |
-| SRT/VTT conversion | Implemented | Import/export endpoints preserve UTF-8 Persian and mixed-script text |\n| Publishing pack | Initial | Draft title options, description, chapters, tags, thumbnail brief |
-| MP4 rendering | Initial | UI render controls, FFmpeg timed title-card render, 16:9 and 9:16, ffprobe dimension validation and MP4 download endpoint; CI smoke test renders a real MP4 |
-| FFmpeg capability detection | Implemented | Detect executable, subtitles filter, libx264, ffprobe |
-| CI | Implemented | Backend pytest and frontend TypeScript/Vite build |
+| React/TypeScript editor shell | Initial | RTL/LTR, scene list, inspector, responsive dark UI |
+| Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |
+| Script-to-storyboard | Initial | Converts paragraphs/sentences to suggested scenes; editable title, type, duration and narration |
+| Project media library | Initial | Frontend upload/list/delete; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
+| Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
+| Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
+| MP4 rendering | Initial | FFmpeg timed title cards, 16:9 and 9:16 profiles, ffprobe validation and download |
+| Capability detection | Implemented | FFmpeg, ffprobe, subtitles filter and libx264 checks |
+| CI workflow | Configured | Backend pytest and frontend TypeScript/Vite build; recent GitHub Actions runs reported startup_failure without creating jobs, so latest CI result is not verified |
 
-## Important limitations
+## Known limitations
 
-- The render endpoint currently renders timed text cards over a solid background. It does not yet compose editable image/video/shape/code/diagram layers. A CI smoke test verifies that FFmpeg creates an MP4, but Persian glyph shaping still needs manual visual inspection.
-- The preview canvas is still a sample composition; it is not yet a WYSIWYG renderer for saved project content.
-- Render jobs are in-memory for the current process. Restarting the API loses job status; outputs already written remain on disk.
-- Render progress streaming, reliable cancellation, queue persistence, and segment-level retry are not implemented yet.
-- Audio recording/import, waveform, trimming, mixing, noise reduction, loudness normalization, and audio muxing are not implemented.
-- Caption import/export exists, but the caption editor, styling controls, preview overlay, and Persian visual QA are not finished.
-- The Persian subtitle spike harness has not been run and visually inspected on a real supported machine. No pixel-parity claim is made.
-- Media library, secure upload/path validation, asset thumbnails/proxies, undo/redo, autosave recovery/version history, templates/brand kit, local Whisper/Piper integration, and publishing pack remain outstanding.
+- Rendering is still timed text cards on a solid background, not a full composition engine for saved scene layers.
+- The preview remains a sample composition and is not WYSIWYG.
+- Media files can be uploaded, listed, previewed when images, downloaded through the API, and deleted; they are not yet attachable to scene layers or timeline clips.
+- Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
+- Audio recording/import, waveform, trim, mix, noise reduction, loudness normalization and render audio mux are not implemented.
+- Subtitle editor, style controls, preview overlay and Persian visual QA are incomplete.
+- Render jobs are in-memory; process restart loses job status. Persistent queue, progress streaming, cancellation and segment retry are not implemented.
+- Undo/redo, crash recovery, version history, templates/brand kit, local Whisper/Piper adapters, and Windows/Linux packaging remain outstanding.
+- Persian glyph shaping still requires visual inspection on a supported machine; no pixel-parity claim is made.
 
 ## Next implementation order
 
-1. Connect script-to-storyboard suggestions to the editor, and implement persistent scene/layer CRUD.
-2. Implement real canvas layers (text, image, SVG, code, editable diagrams), transform controls, safe areas, and undo/redo.
-3. Add media thumbnails/proxies and connect the project media library to the frontend.
-4. Add browser microphone recording and audio import/edit/mix, then caption editor and audio/caption preview.
-5. Replace title-card-only renderer with deterministic multi-layer scene composition; add audio mux, subtitle burn-in, progress/cancel, persistent jobs, and output validation.
-6. Add optional local Whisper/Piper adapters with explicit model installation and license notices.
-7. Add publishing pack and full Windows/Linux fresh-install verification.
+1. Add persistent scene-layer schema and attach uploaded media to scenes.
+2. Build a deterministic canvas compositor for text, image, video, SVG, code and diagram layers, with explicit transforms and no automatic movement/zoom.
+3. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
+4. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
+5. Complete caption editing, styling, overlay preview and verified Persian shaping.
+6. Persist render jobs and add progress, cancellation, retry and output validation.
+7. Add optional local speech-to-text and text-to-speech adapters with model/license guidance.
+8. Add recovery/versioning, backup/export, packaging and end-to-end installation checks.
 
-A phase is not considered complete merely because files are committed. It needs passing CI plus a reproducible end-to-end check.
+A phase is not complete merely because files are committed. It needs passing automated checks and a reproducible end-to-end verification.
