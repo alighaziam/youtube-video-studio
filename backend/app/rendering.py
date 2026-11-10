@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -48,7 +49,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,DejaVu Sans,{int(height * 0.055)},&H00FFFFFF,&H000000FF,&H00101827,&H80101827,1,0,1,2,1,5,100,100,100,1
+Style: Title,DejaVu Sans,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,1,0,1,3,1,8,110,110,90,1
+Style: Caption,DejaVu Sans,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -58,11 +60,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     for scene in scenes:
         duration = max(1, min(3600, int(scene.get("duration", 5))))
         title = _ass_escape(str(scene.get("title", "Untitled scene")))
-        body = _ass_escape(str(scene.get("body", scene.get("narration", ""))))
-        content = title if not body else title + r"\N" + body
-        events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + duration)},Default,,0,0,0,,{content}")
+        events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + min(3, duration))},Title,,0,0,0,,{title}")
+        narration = str(scene.get("narration") or scene.get("body") or "").strip()
+        if narration:
+            sentences = [part.strip() for part in re.split(r"(?<=[.!?؟])\\s+", narration) if part.strip()]
+            chunks: list[str] = []
+            for sentence in sentences or [narration]:
+                words = sentence.split()
+                for offset in range(0, len(words), 12):
+                    chunks.append(" ".join(words[offset:offset + 12]))
+            weights = [max(1, len(chunk.split())) for chunk in chunks]
+            total_weight = sum(weights) or 1
+            local_cursor = cursor
+            for chunk, weight in zip(chunks, weights):
+                chunk_duration = duration * weight / total_weight
+                end = min(cursor + duration, local_cursor + chunk_duration)
+                events.append(f"Dialogue: 1,{_ass_time(local_cursor)},{_ass_time(end)},Caption,,0,0,0,,{_ass_escape(chunk)}")
+                local_cursor = end
         cursor += duration
-    return header + "\n".join(events) + "\n"
+    return header + "\\n".join(events) + "\\n"
 
 
 def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: int) -> str:
