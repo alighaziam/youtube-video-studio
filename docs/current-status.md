@@ -34,10 +34,10 @@ Updated: 2026-11-10
 
 1. Add a multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom.
 2. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
-4. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
-5. Complete caption editing, styling, overlay preview and verified Persian shaping.
-6. Persist render jobs and add progress, cancellation, retry and output validation.
-7. Add optional local speech-to-text, improve voice selection/preview and add audio recording/import/editing with model/license guidance.
-8. Add recovery/versioning, backup/export, packaging and end-to-end installation checks.
+3. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
+4. Complete caption editing, styling, overlay preview and verified Persian shaping.
+5. Persist render jobs and add progress, cancellation, retry and output validation.
+6. Add optional local speech-to-text, improve voice selection/preview and add audio recording/import/editing with model/license guidance.
+7. Add recovery/versioning, backup/export, packaging and end-to-end installation checks.
 
 A phase is not complete merely because files are committed. It needs passing automated checks and a reproducible end-to-end verification.
