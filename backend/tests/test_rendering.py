@@ -60,3 +60,46 @@ def test_ass_adds_labels_to_generated_diagram_templates() -> None:
     assert "CLIENT" in result and "API" in result and "DATA" in result
     assert "SOURCE CODE" in result
     assert "OPTION A" in result and "OPTION B" in result
+
+
+
+def test_semantic_visual_specs_detect_software_architecture_patterns() -> None:
+    from app.rendering import _infer_visual_spec
+
+    assert _infer_visual_spec({
+        "kind": "Architecture diagram",
+        "title": "Event-driven order processing",
+        "narration": "Kafka carries events from producer to consumer.",
+    })["nodes"] == ["PRODUCER", "BROKER", "CONSUMER"]
+    assert _infer_visual_spec({
+        "kind": "Architecture diagram",
+        "title": "API Gateway",
+        "narration": "The gateway routes requests to services.",
+    })["nodes"] == ["CLIENT", "API GATEWAY", "SERVICES", "DATA"]
+    assert _infer_visual_spec({
+        "kind": "Architecture diagram",
+        "title": "Modular Monolith",
+        "narration": "Orders and Catalog modules use explicit contracts.",
+    })["nodes"] == ["API", "ORDERS", "CATALOG", "SHARED DB"]
+
+
+def test_semantic_diagram_labels_follow_scene_meaning() -> None:
+    result = _build_ass([
+        {"title": "Kafka event flow", "kind": "Architecture diagram", "narration": "Events move through the broker.", "duration": 8},
+        {"title": "Database read path", "kind": "Architecture diagram", "narration": "The API reads from PostgreSQL.", "duration": 8},
+        {"title": "Login sequence", "kind": "Architecture diagram", "narration": "OAuth authentication issues a token.", "duration": 8},
+    ], 1920, 1080)
+    assert "PRODUCER" in result and "BROKER" in result and "CONSUMER" in result
+    assert "READ / WRITE" in result
+    assert "IDENTITY" in result and "TOKEN" in result
+
+
+def test_semantic_visual_filters_remain_static_and_support_four_nodes() -> None:
+    event = _scene_visual_filter({
+        "kind": "Architecture diagram",
+        "title": "API Gateway",
+        "narration": "Routes requests to services and databases.",
+    }, 1080, 1920, 30)
+    assert event.count("drawbox") >= 10
+    assert "zoompan" not in event
+    assert "crop=1080:1920" in event
