@@ -48,3 +48,15 @@ def test_caption_timing_uses_generated_voice_duration() -> None:
     caption_lines = [line for line in result.splitlines() if ",Caption,," in line]
     assert caption_lines
     assert "0:00:04.25" in caption_lines[-1]
+
+
+
+def test_ass_adds_labels_to_generated_diagram_templates() -> None:
+    result = _build_ass([
+        {"title": "Architecture", "kind": "Architecture diagram", "duration": 8},
+        {"title": "Code sample", "kind": "Code", "duration": 8},
+        {"title": "Trade-offs", "kind": "Comparison", "duration": 8},
+    ], 1920, 1080)
+    assert "CLIENT" in result and "API" in result and "DATA" in result
+    assert "SOURCE CODE" in result
+    assert "OPTION A" in result and "OPTION B" in result
