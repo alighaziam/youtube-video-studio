@@ -1,20 +1,55 @@
 # YouTube Video Production Studio
 
-A free, local-first video production studio for creating YouTube videos with Persian and English support.
+A free, local-first studio for producing faceless educational videos—especially software architecture, engineering, code walkthroughs, and system-design lessons.
+
+## Product goal
+
+Turn a lesson idea into a polished YouTube video through one repeatable workflow:
+
+**Script → Storyboard → Visual scenes → Voice-over → Captions → Timeline → Render → Publishing pack**
+
+The product is designed for creators who want professional motion-slide videos without appearing on camera or depending on paid cloud services.
+
+## Design principles
+
+- Local-first: no mandatory cloud service, paid API, account, or API key.
+- Persian RTL and English LTR support, including mixed-language captions and code.
+- Professional, reusable scene templates and brand kit.
+- Static content stays static: no automatic zoom, pan, camera drift, or scaling.
+- Motion is explicit and intentional: reveal, highlight, fade, slide, and diagram sequencing.
+- FFmpeg is the rendering engine; capabilities are detected rather than assumed.
+- Optional local speech models; basic editing must work without them.
+- No telemetry and no automatic publishing.
+
+## Core workflow
+
+1. Create a YouTube 16:9 or Shorts 9:16 project.
+2. Write a lesson script and split it into scenes.
+3. Design slides, code panels, and editable architecture diagrams.
+4. Record/import narration or optionally use local TTS.
+5. Create and edit Persian/English subtitles.
+6. Arrange scenes, audio, and captions.
+7. Render MP4 locally and validate the output.
+8. Export an editable YouTube publishing pack.
+
+## Documentation
+
+- [Product requirements](docs/product-requirements.md)
+- [UX and visual system](docs/ux-and-visual-system.md)
+- [Application architecture](docs/architecture.md)
+- [Creator workflow](docs/creator-workflow.md)
+- [Implementation roadmap](docs/roadmap.md)
+- [Persian subtitle rendering spike](docs/technical-spike-persian-subtitles.md)
+
+## Technology direction
+
+- Frontend: React, TypeScript, Vite, Zustand, Tailwind
+- Backend: FastAPI, Pydantic, SQLAlchemy, SQLite, Alembic
+- Media: system FFmpeg with libass capability detection
+- Optional local AI: faster-whisper and Piper, downloaded only by explicit user action
 
 ## Project status
 
-The project is being built in gated phases. The first milestone validates Persian subtitle rendering with FFmpeg/libass and browser preview before the editor foundation is implemented.
+Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The editor and rendering pipeline are not yet complete.
 
-## Principles
-
-- Local-first; no paid APIs or mandatory cloud services.
-- React + TypeScript frontend and FastAPI backend.
-- FFmpeg-based export with capability detection.
-- Persian RTL and English UI support.
-- No automatic zoom, pan, or scaling on static content.
-- No telemetry.
-
-## Development
-
-Implementation and setup instructions will be added as the project phases are completed. See `docs/` for technical decisions and validation reports.
+See [the roadmap](docs/roadmap.md) for phase gates.
