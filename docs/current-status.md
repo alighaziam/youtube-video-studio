@@ -10,7 +10,7 @@ Updated: 2026-11-10
 | Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |
 | Script-to-storyboard | Initial | Converts paragraphs/sentences to suggested scenes; editable title, type, duration and narration |
 | Project media library | Initial | Frontend upload/list/delete; image previews; scene-level media references and image/video preview; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
-| Local voice-over | Initial | Piper voice catalog, local per-scene WAV synthesis, scene audio references, audio preview and voice track; requires user-installed engine and licensed models |
+| Local voice-over | Initial | Piper voice catalog, one-action script → storyboard → per-scene WAV synthesis → MP4 render, scene audio references, audio preview and voice track; requires user-installed engine and licensed models |
 | MP4 audio mix | Initial | FFmpeg mixes generated scene narration at scene offsets, extends scene timing when narration exceeds its planned duration, and validates the final MP4 |
 | Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
 | Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
