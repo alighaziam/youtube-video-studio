@@ -25,6 +25,9 @@ export default function App() {
   const [renderJobId, setRenderJobId] = useState<string | null>(null);
   const [renderState, setRenderState] = useState("idle");
   const [renderMessage, setRenderMessage] = useState("");
+  const [scriptText, setScriptText] = useState("");
+  const [scriptBusy, setScriptBusy] = useState(false);
+  const [publishingPack, setPublishingPack] = useState("");
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
@@ -88,6 +91,32 @@ export default function App() {
     setActive(next.id);
   };
   const updateSelected = (patch: Partial<Scene>) => setScenes((items) => items.map((scene) => scene.id === active ? { ...scene, ...patch } : scene));
+  const generateStoryboard = async () => {
+    if (!project || !scriptText.trim()) return;
+    setScriptBusy(true);
+    try {
+      const response = await fetch(`${API}/storyboard/from-script`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: project.title, script: scriptText, language: locale, words_per_minute: 130 }),
+      });
+      if (!response.ok) throw new Error((await response.json()).detail ?? "Storyboard generation failed");
+      const result = await response.json();
+      setScenes(result.scenes.map((scene: Scene) => ({ id: scene.id, title: scene.title, kind: scene.kind, duration: scene.duration })));
+      if (result.scenes.length) setActive(result.scenes[0].id);
+      setScriptText("");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Storyboard generation failed"); }
+    finally { setScriptBusy(false); }
+  };
+
+  const generatePublishingPack = async () => {
+    if (!project) return;
+    try {
+      const response = await fetch(`${API}/projects/${project.id}/publishing-pack`, { method: "POST" });
+      if (!response.ok) throw new Error("Publishing pack generation failed");
+      setPublishingPack(JSON.stringify(await response.json(), null, 2));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Publishing pack failed"); }
+  };
+
   const startRender = async () => {
     if (!project || renderState === "queued" || renderState === "running") return;
     setRenderState("queued"); setRenderMessage("");
@@ -119,7 +148,7 @@ export default function App() {
     <header className="topbar">
       <div className="brand"><span className="logo">▣</span><div><b>FrameLab</b><small>VIDEO PRODUCTION STUDIO</small></div></div>
       <div className="project"><i/> {project?.title ?? (fa ? "در حال بارگذاری پروژه..." : "Loading project...")} <small className="save-status">{statusLabel}</small></div>
-      <div className="actions"><button onClick={() => setLocale(fa ? "en" : "fa")}>{fa ? "EN" : "فا"}</button><button onClick={() => setRenderProfile(renderProfile === "youtube-1080p" ? "shorts-1080p" : "youtube-1080p")}>{renderProfile === "youtube-1080p" ? "16:9" : "9:16"}</button><button className="primary" onClick={startRender} disabled={!project || renderState === "queued" || renderState === "running"}>{renderState === "queued" || renderState === "running" ? (fa ? "در حال رندر..." : "Rendering...") : (fa ? "رندر MP4" : "Render MP4")}</button></div>
+      <div className="actions"><button onClick={() => setLocale(fa ? "en" : "fa")}>{fa ? "EN" : "فا"}</button><button onClick={generatePublishingPack}>{fa ? "بسته انتشار" : "YT pack"}</button><button onClick={() => setRenderProfile(renderProfile === "youtube-1080p" ? "shorts-1080p" : "youtube-1080p")}>{renderProfile === "youtube-1080p" ? "16:9" : "9:16"}</button><button className="primary" onClick={startRender} disabled={!project || renderState === "queued" || renderState === "running"}>{renderState === "queued" || renderState === "running" ? (fa ? "در حال رندر..." : "Rendering...") : (fa ? "رندر MP4" : "Render MP4")}</button></div>
     </header>
     <aside className="sidebar">
       <label>{fa ? "فضای تولید" : "WORKSPACE"}</label>
@@ -146,7 +175,7 @@ export default function App() {
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
         <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><span className="empty-track">{fa ? "هنوز فایلی اضافه نشده" : "No audio added yet"}</span></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
-        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}</div>}
+        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
       </section>
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>
