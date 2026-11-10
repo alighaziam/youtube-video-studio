@@ -51,6 +51,7 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Title,DejaVu Sans,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,1,0,1,3,1,8,110,110,90,1
 Style: Caption,DejaVu Sans,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
+Style: Diagram,DejaVu Sans,{int(height * 0.024)},&H00E8F0FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,1,5,20,20,20,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -61,6 +62,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         duration = max(1, min(3600, int(scene.get("duration", 5))))
         title = _ass_escape(str(scene.get("title", "Untitled scene")))
         events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + min(3, duration))},Title,,0,0,0,,{title}")
+        kind = str(scene.get("kind", "")).lower()
+        diagram_labels: list[tuple[str, int, int]] = []
+        if "architecture" in kind or "diagram" in kind or "معماری" in kind or "دیاگرام" in kind:
+            diagram_labels = [
+                ("CLIENT", int(width * .185), int(height * .495)),
+                ("API", int(width * .5), int(height * .495)),
+                ("DATA", int(width * .815), int(height * .495)),
+            ]
+        elif "code" in kind or "کد" in kind:
+            diagram_labels = [("SOURCE CODE", int(width * .5), int(height * .265))]
+        elif "comparison" in kind or "مقایسه" in kind:
+            diagram_labels = [
+                ("OPTION A", int(width * .28), int(height * .5)),
+                ("OPTION B", int(width * .72), int(height * .5)),
+            ]
+        for label, x, y in diagram_labels:
+            override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
+            events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{_ass_escape(label)}")
         narration = str(scene.get("narration") or scene.get("body") or "").strip()
         if narration:
             caption_duration = min(float(duration), max(0.5, float(scene.get("captionDuration", duration))))
