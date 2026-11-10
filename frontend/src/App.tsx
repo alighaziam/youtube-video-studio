@@ -25,6 +25,7 @@ export default function App() {
   const [renderJobId, setRenderJobId] = useState<string | null>(null);
   const [renderState, setRenderState] = useState("idle");
   const [renderMessage, setRenderMessage] = useState("");
+  const [renderDownloadUrl, setRenderDownloadUrl] = useState("");
   const [scriptText, setScriptText] = useState("");
   const [scriptBusy, setScriptBusy] = useState(false);
   const [publishingPack, setPublishingPack] = useState("");
@@ -134,7 +135,7 @@ export default function App() {
         const response = await fetch(`${API}/jobs/${renderJobId}`);
         if (!response.ok) throw new Error("Could not read render job status");
         const job = await response.json(); setRenderState(job.status);
-        if (job.status === "completed") { setRenderMessage(`${job.width}×${job.height} · ${job.output_path}`); setRenderJobId(null); }
+        if (job.status === "completed") { setRenderMessage(`${job.width}×${job.height}`); setRenderDownloadUrl(`${API}/jobs/${renderJobId}/download`); setRenderJobId(null); }
         if (job.status === "failed") { setRenderMessage(job.error ?? "Render failed"); setRenderJobId(null); }
       } catch (reason) { setRenderState("failed"); setRenderMessage(reason instanceof Error ? reason.message : "Render status error"); setRenderJobId(null); }
     };
@@ -177,7 +178,7 @@ export default function App() {
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
         <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><span className="empty-track">{fa ? "هنوز فایلی اضافه نشده" : "No audio added yet"}</span></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
-        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
+        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
       </section>
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>
