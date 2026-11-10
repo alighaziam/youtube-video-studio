@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request\nfrom fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["rendering"])
@@ -151,3 +151,17 @@ def get_render_job(job_id: str) -> dict[str, Any]:
         if job is None:
             raise HTTPException(status_code=404, detail="Render job not found")
         return dict(job)
+
+
+@router.get("/api/v1/jobs/{job_id}/download")
+def download_render(job_id: str):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Render job not found")
+        if job.get("status") != "completed" or not job.get("output_path"):
+            raise HTTPException(status_code=409, detail="Render output is not ready")
+        output_path = Path(job["output_path"]).resolve()
+    if not output_path.is_file():
+        raise HTTPException(status_code=404, detail="Render output file no longer exists")
+    return FileResponse(output_path, media_type="video/mp4", filename=output_path.name)
