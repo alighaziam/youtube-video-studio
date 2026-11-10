@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
-type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string };
+type DiagramNode = { id: string; label: string; x: number; y: number };
+type DiagramEdge = { label: string };
+type SceneDiagram = { nodes: DiagramNode[]; edges: DiagramEdge[]; accentColor?: string };
+type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string; diagram?: SceneDiagram };
 type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
 type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
 type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
@@ -13,7 +16,7 @@ const starterScenes: Scene[] = [
   { id: "scene-05", title: "Trade-offs and recap", kind: "جمع‌بندی", duration: 25 },
 ];
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-const getSceneDiagramLabels = (scene?: Scene): string[] => {
+const getSuggestedDiagramLabels = (scene?: Scene): string[] => {
   if (!scene) return ["CLIENT", "API", "DATA"];
   const kind = scene.kind.toLowerCase();
   const text = [scene.title, scene.narration ?? "", scene.kind].join(" ").toLowerCase();
@@ -26,6 +29,14 @@ const getSceneDiagramLabels = (scene?: Scene): string[] => {
   if (/sequence diagram|request flow|authentication|oauth|login flow|احراز هویت|ورود کاربر/.test(text)) return ["CLIENT", "IDENTITY", "TOKEN", "API"];
   if (/database|postgres|mysql|دیتابیس|پایگاه داده/.test(text)) return ["CLIENT", "API", "DATABASE"];
   return ["CLIENT", "API", "DATA"];
+};
+const makeDefaultDiagram = (scene?: Scene): SceneDiagram => {
+  const labels = getSuggestedDiagramLabels(scene);
+  return {
+    nodes: labels.map((label, index) => ({ id: `node-${index + 1}`, label, x: Math.round(12 + index * (76 / Math.max(1, labels.length - 1))), y: 48 })),
+    edges: labels.slice(1).map((_, index) => ({ label: ["REQUEST", "ROUTE", "PERSIST"][index % 3] })),
+    accentColor: "#7187ff",
+  };
 };
 
 
@@ -60,6 +71,7 @@ export default function App() {
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
   const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
   const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
+  const selectedDiagram = selected?.diagram ?? makeDefaultDiagram(selected);
 
   useEffect(() => {
     let alive = true;
@@ -219,6 +231,19 @@ export default function App() {
     setActive(next.id);
   };
   const updateSelected = (patch: Partial<Scene>) => setScenes((items) => items.map((scene) => scene.id === active ? { ...scene, ...patch } : scene));
+  const updateDiagram = (patch: Partial<SceneDiagram>) => updateSelected({ diagram: { ...selectedDiagram, ...patch } });
+  const updateDiagramNode = (index: number, patch: Partial<DiagramNode>) => updateDiagram({ nodes: selectedDiagram.nodes.map((node, nodeIndex) => nodeIndex === index ? { ...node, ...patch } : node) });
+  const updateDiagramEdge = (index: number, label: string) => updateDiagram({ edges: selectedDiagram.edges.map((edge, edgeIndex) => edgeIndex === index ? { ...edge, label } : edge) });
+  const resetDiagram = () => updateSelected({ diagram: makeDefaultDiagram(selected) });
+  const addDiagramNode = () => {
+    const index = selectedDiagram.nodes.length;
+    const nodes = [...selectedDiagram.nodes, { id: `node-${crypto.randomUUID()}`, label: `NODE ${index + 1}`, x: 12 + (index % 4) * 25, y: 48 + Math.floor(index / 4) * 22 }];
+    updateDiagram({ nodes, edges: [...selectedDiagram.edges, { label: "CONNECTS" }] });
+  };
+  const removeDiagramNode = (index: number) => {
+    const nodes = selectedDiagram.nodes.filter((_, nodeIndex) => nodeIndex !== index);
+    updateDiagram({ nodes, edges: nodes.slice(1).map((_, edgeIndex) => selectedDiagram.edges[edgeIndex] ?? { label: "CONNECTS" }) });
+  };
   const generateStoryboard = async () => {
     if (!project || !scriptText.trim()) return;
     setScriptBusy(true);
@@ -321,7 +346,7 @@ export default function App() {
         <div className="stage">{selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="attached-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}<small>{selectedAsset.name}</small></div> : <div className="slide">
           <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
           <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
-          <div className="diagram">{getSceneDiagramLabels(selected).map((label,index)=><div key={label} className={index===1?"focus":""}>{label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
+          <div className="diagram editor-diagram" style={{"--diagram-accent":selectedDiagram.accentColor ?? "#7187ff"} as React.CSSProperties}>{selectedDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
           <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
         </div>}</div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
@@ -332,7 +357,16 @@ export default function App() {
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>
         <nav>{[["design",fa?"طراحی":"Design"],["motion",fa?"حرکت":"Motion"],["audio",fa?"صدا":"Audio"],["timing",fa?"زمان":"Timing"]].map(([k,v])=><button className={tab===k?"chosen":""} onClick={()=>setTab(k)} key={k}>{v}</button>)}</nav>
-        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"گویندگی این صحنه":"Scene voice-over"}</h3>{selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)}/><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa?"هنوز صدایی برای این صحنه تولید نشده است.":"No generated voice-over for this scene yet."}</p>}<h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.filter(asset=>asset.mime_type.startsWith("image/") || asset.mime_type.startsWith("video/")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}<h3>{fa?"قالب بصری":"Visual style"}</h3><div className="swatches"><i/><i/><i/><i/></div><label>{fa?"پس‌زمینه":"Background"}</label><div className="field">#111827</div><h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Voice-over settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Choose a local Piper voice in the script panel and generate narration for every scene.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
+        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"گویندگی این صحنه":"Scene voice-over"}</h3>{selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)}/><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa?"هنوز صدایی برای این صحنه تولید نشده است.":"No generated voice-over for this scene yet."}</p>}<h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.filter(asset=>asset.mime_type.startsWith("image/") || asset.mime_type.startsWith("video/")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}<h3>{fa?"دیاگرام قابل ویرایش":"Editable diagram"}</h3>
+          <div className="diagram-tools"><label>{fa?"رنگ تأکیدی":"Accent color"}</label><input aria-label="Diagram accent color" type="color" value={selectedDiagram.accentColor ?? "#7187ff"} onChange={event=>updateDiagram({accentColor:event.target.value})}/><button type="button" onClick={resetDiagram}>{fa?"بازنشانی پیشنهاد":"Reset suggestion"}</button></div>
+          {selectedDiagram.nodes.map((node,index)=><div className="diagram-node-editor" key={node.id}>
+            <b>{fa?`گره ${index+1}`:`Node ${index+1}`}</b><button type="button" onClick={()=>removeDiagramNode(index)} disabled={selectedDiagram.nodes.length<=2}>×</button>
+            <input className="field edit-field" aria-label={`Node ${index+1} label`} value={node.label} onChange={event=>updateDiagramNode(index,{label:event.target.value})}/>
+            <div className="diagram-coordinates"><label>X % <input className="field edit-field" type="number" min="5" max="95" value={node.x} onChange={event=>updateDiagramNode(index,{x:Math.max(5,Math.min(95,Number(event.target.value)||5))})}/></label><label>Y % <input className="field edit-field" type="number" min="12" max="82" value={node.y} onChange={event=>updateDiagramNode(index,{y:Math.max(12,Math.min(82,Number(event.target.value)||12))})}/></label></div>
+            {index<selectedDiagram.nodes.length-1 && <label>{fa?"برچسب ارتباط":"Connection label"}<input className="field edit-field" value={selectedDiagram.edges[index]?.label ?? ""} onChange={event=>updateDiagramEdge(index,event.target.value)}/></label>}
+          </div>)}
+          <button className="diagram-add" type="button" onClick={addDiagramNode}>{fa?"＋ افزودن گره":"＋ Add node"}</button>
+          <h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Voice-over settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Choose a local Piper voice in the script panel and generate narration for every scene.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
         <div className="note">✧ {fa?"حرکت فقط با انتخاب شما اعمال می‌شود؛ محتوای ثابت بدون زوم و پن می‌ماند.":"Motion is opt-in. Static content never auto-zooms or pans."}</div>
       </aside>
     </main>
