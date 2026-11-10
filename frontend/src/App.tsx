@@ -304,10 +304,10 @@ export default function App() {
       <section className="editor">
         <div className="editor-head"><div><small>SCENE PREVIEW</small><b>{selected?.title}</b></div><span>16:9　　100%</span></div>
         <div className="stage">{selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="attached-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}<small>{selectedAsset.name}</small></div> : <div className="slide">
-          <div className="slide-meta"><span>SOFTWARE ARCHITECTURE / 08</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
-          <div className="hero"><small>ARCHITECTURE PATTERN</small><h1>Modular<br/><i>Monolith</i></h1><p>One deployable unit.<br/>Clear boundaries. Independent modules.</p></div>
-          <div className="diagram"><div>ORDER<small>Domain module</small></div><div className="focus">PAYMENT<small>Domain module</small></div><div>INVENTORY<small>Domain module</small></div></div>
-          <div className="slide-meta footer"><span>ARCHITECTURE NOTES</span><span>DESIGN FOR CHANGE</span></div>
+          <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
+          <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
+          <div className="diagram">{(selected?.kind.toLowerCase().includes("comparison") ? ["OPTION A","OPTION B"] : selected?.kind.toLowerCase().includes("code") ? ["INPUT","VALIDATE","OUTPUT"] : ["CLIENT","API","DATA"]).map((label,index)=><div key={label} className={index===1?"focus":""}>{label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
+          <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
         </div>}</div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
