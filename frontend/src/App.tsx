@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-type Scene = { id: string; title: string; kind: string; duration: number; narration?: string };
+type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string };
 type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
 type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
 const API = "http://127.0.0.1:8000/api/v1";
@@ -36,6 +36,7 @@ export default function App() {
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
+  const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
 
   useEffect(() => {
     let alive = true;
@@ -220,12 +221,12 @@ export default function App() {
       </section>
       <section className="editor">
         <div className="editor-head"><div><small>SCENE PREVIEW</small><b>{selected?.title}</b></div><span>16:9　　100%</span></div>
-        <div className="stage"><div className="slide">
+        <div className="stage">{selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="attached-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}<small>{selectedAsset.name}</small></div> : <div className="slide">
           <div className="slide-meta"><span>SOFTWARE ARCHITECTURE / 08</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
           <div className="hero"><small>ARCHITECTURE PATTERN</small><h1>Modular<br/><i>Monolith</i></h1><p>One deployable unit.<br/>Clear boundaries. Independent modules.</p></div>
           <div className="diagram"><div>ORDER<small>Domain module</small></div><div className="focus">PAYMENT<small>Domain module</small></div><div>INVENTORY<small>Domain module</small></div></div>
           <div className="slide-meta footer"><span>ARCHITECTURE NOTES</span><span>DESIGN FOR CHANGE</span></div>
-        </div></div>
+        </div>}</div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
         <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><span className="empty-track">{fa ? "هنوز فایلی اضافه نشده" : "No audio added yet"}</span></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
@@ -234,7 +235,7 @@ export default function App() {
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>
         <nav>{[["design",fa?"طراحی":"Design"],["motion",fa?"حرکت":"Motion"],["audio",fa?"صدا":"Audio"],["timing",fa?"زمان":"Timing"]].map(([k,v])=><button className={tab===k?"chosen":""} onClick={()=>setTab(k)} key={k}>{v}</button>)}</nav>
-        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"قالب بصری":"Visual style"}</h3><div className="swatches"><i/><i/><i/><i/></div><label>{fa?"پس‌زمینه":"Background"}</label><div className="field">#111827</div><h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Audio settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Audio import and recording are scheduled for the audio milestone.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
+        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}<h3>{fa?"قالب بصری":"Visual style"}</h3><div className="swatches"><i/><i/><i/><i/></div><label>{fa?"پس‌زمینه":"Background"}</label><div className="field">#111827</div><h3>{fa?"لایه‌ها":"Layers"}</h3><div className="layer">▤　Headline <em>Visible</em></div><div className="layer">⌘　Architecture diagram <em>Visible</em></div><div className="layer">▤　Captions <em>Visible</em></div></>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Audio settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Audio import and recording are scheduled for the audio milestone.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
         <div className="note">✧ {fa?"حرکت فقط با انتخاب شما اعمال می‌شود؛ محتوای ثابت بدون زوم و پن می‌ماند.":"Motion is opt-in. Static content never auto-zooms or pans."}</div>
       </aside>
     </main>
