@@ -204,3 +204,11 @@ def test_diagram_layer_draws_its_frame_and_positions_each_node_label() -> None:
     ass = _build_ass([scene], 1920, 1080)
     assert "drawbox=x=192:y=216:w=1536:h=324" in filters
     assert "CLIENT" in ass and "ORDER API" in ass and "DATABASE" in ass
+
+
+
+def test_diagram_layer_labels_split_arrows_and_pipe_separators() -> None:
+    from app.rendering import _split_diagram_labels
+
+    assert _split_diagram_labels("CLIENT → ORDER API → DATABASE") == ["CLIENT", "ORDER API", "DATABASE"]
+    assert _split_diagram_labels("PRODUCER -> BROKER | CONSUMER") == ["PRODUCER", "BROKER", "CONSUMER"]
