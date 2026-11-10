@@ -204,15 +204,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             content = layer["content"].strip()
             if not content:
                 continue
-            x = int(width * (layer["x"] + layer["width"] / 2) / 100)
-            y = int(height * (layer["y"] + layer["height"] / 2) / 100)
             style = "LayerCode" if layer["type"] == "code" else "LayerText"
-            override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
-            if layer["opacity"] < 1:
-                alpha = round((1 - layer["opacity"]) * 255)
-                override += chr(92) + f"alpha&H{alpha:02X}&"
             event_layer = 3 + min(20, layer["zIndex"])
-            events.append(f"Dialogue: {event_layer},{_ass_time(cursor)},{_ass_time(cursor + duration)},{style},,0,0,0,,{{{override}}}{_ass_escape(content)}")
+            if layer["type"] == "diagram":
+                labels = [part.strip() for part in re.split(r"\\s*(?:→|->|\\|)\\s*", content) if part.strip()][:8]
+                for node_index, label in enumerate(labels):
+                    fraction = (node_index + 0.5) / max(1, len(labels))
+                    x = int(width * (layer["x"] + layer["width"] * fraction) / 100)
+                    y = int(height * (layer["y"] + layer["height"] / 2) / 100)
+                    override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
+                    events.append(f"Dialogue: {event_layer},{_ass_time(cursor)},{_ass_time(cursor + duration)},LayerText,,0,0,0,,{{{override}}}{_ass_escape(label)}")
+            else:
+                x = int(width * (layer["x"] + layer["width"] / 2) / 100)
+                y = int(height * (layer["y"] + layer["height"] / 2) / 100)
+                override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
+                if layer["opacity"] < 1:
+                    alpha = round((1 - layer["opacity"]) * 255)
+                    override += chr(92) + f"alpha&H{alpha:02X}&"
+                events.append(f"Dialogue: {event_layer},{_ass_time(cursor)},{_ass_time(cursor + duration)},{style},,0,0,0,,{{{override}}}{_ass_escape(content)}")
         narration = str(scene.get("narration") or scene.get("body") or "").strip()
         if narration:
             caption_duration = min(float(duration), max(0.5, float(scene.get("captionDuration", duration))))
@@ -286,6 +295,14 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
             f"drawbox=x={int(width*.08)}:y={int(height*.16)}:w={int(width*.84)}:h={int(height*.006)}:color=0x7187ff@0.48:t=fill",
             f"drawbox=x={int(width*.08)}:y={int(height*.84)}:w={int(width*.84)}:h={int(height*.004)}:color=0x7187ff@0.3:t=fill",
         ])
+    for layer in _normalize_scene_layers(scene.get("layers")):
+        if not layer["visible"] or layer["type"] != "diagram":
+            continue
+        x, y = int(width * layer["x"] / 100), int(height * layer["y"] / 100)
+        box_w = max(2, int(width * layer["width"] / 100))
+        box_h = max(2, int(height * layer["height"] / 100))
+        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color=0x7187ff@0.18:t=fill")
+        filters.append(f"drawbox=x={x}:y={y}:w={box_w}:h={box_h}:color=0x8e9cff@0.95:t=3")
     return ",".join(filters)
 
 
