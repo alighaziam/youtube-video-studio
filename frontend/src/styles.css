@@ -22,3 +22,18 @@
 
 
 .slide .hero h1{font-size:clamp(22px,3.2vw,40px);line-height:1.08;max-width:88%;overflow-wrap:anywhere;letter-spacing:-1px}.slide .hero p{max-width:82%;max-height:3.6em;overflow:hidden;overflow-wrap:anywhere}.slide .diagram{max-width:100%;flex-wrap:wrap}.slide .diagram div{min-width:72px}
+
+.editor-diagram{position:relative;display:block;align-self:stretch;height:150px;min-height:150px;margin-top:auto;overflow:hidden;border:1px solid #ffffff12;border-radius:10px;background:#0c1424}
+.editor-diagram>div{position:absolute;transform:translate(-50%,-50%);min-width:74px;max-width:30%;padding:7px 8px;border:1px solid var(--diagram-accent,#7187ff);border-radius:6px;background:#1b2b47;color:#e3e9ff;font:700 8px "DM Sans";text-align:center;overflow-wrap:anywhere}
+.editor-diagram>div.focus{background:#343266;border-color:var(--diagram-accent,#827aff)}
+.diagram-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.diagram-tools input[type=color]{width:42px;height:30px;padding:2px;border:1px solid #34415c;border-radius:6px;background:#111a2b}
+.diagram-tools button,.diagram-add,.diagram-node-editor>button{border:1px solid #34415c;border-radius:6px;background:#18243a;color:#bfc9dc;padding:6px 8px;font-size:10px;cursor:pointer}
+.diagram-node-editor{padding:9px;margin:8px 0;border:1px solid #283650;border-radius:8px;background:#111a2b}
+.diagram-node-editor>b{font-size:10px;color:#aab8d0}
+.diagram-node-editor>button{float:inline-end;padding:2px 7px}
+.diagram-coordinates{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.diagram-coordinates label{font-size:9px;color:#8594ad}
+.diagram-coordinates input{width:100%;margin-top:4px}
+.diagram-node-editor .edit-field{margin:5px 0}
+.diagram-add{width:100%;margin:8px 0 14px}
