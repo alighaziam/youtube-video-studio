@@ -163,3 +163,26 @@ def test_ass_renders_visible_text_and_code_layers_with_layer_positions() -> None
     assert "Independent headline" in result
     assert "class OrderService" in result
     assert "Hidden text" not in result
+
+
+
+def test_scene_layer_filter_composites_media_in_z_order() -> None:
+    from pathlib import Path
+    from app.rendering import _normalize_scene_layers, _scene_layer_filter
+
+    layers = _normalize_scene_layers([
+        {"id": "front", "type": "image", "x": 50, "y": 20, "width": 25, "height": 30, "zIndex": 2, "opacity": 0.5, "visible": True},
+        {"id": "back", "type": "video", "x": 10, "y": 10, "width": 40, "height": 50, "zIndex": 1, "opacity": 1, "visible": True},
+        {"id": "hidden", "type": "image", "visible": False},
+    ])
+    assert [layer["id"] for layer in layers] == ["back", "front"]
+    graph, output = _scene_layer_filter(
+        {"kind": "Concept"}, 1920, 1080, 30,
+        [(layers[0], Path("/tmp/back.mp4")), (layers[1], Path("/tmp/front.png"))],
+    )
+    assert output == "[vout]"
+    assert "[1:v]" in graph and "[2:v]" in graph
+    assert "overlay=x=192:y=108" in graph
+    assert "overlay=x=960:y=216" in graph
+    assert "colorchannelmixer=aa=0.5" in graph
+    assert "zoompan" not in graph
