@@ -44,6 +44,30 @@ def _infer_visual_spec(scene: dict[str, Any]) -> dict[str, Any]:
     kind = str(scene.get("kind", "")).lower()
     text = " ".join(str(scene.get(key, "")) for key in ("title", "narration", "body", "kind")).lower()
 
+    visual = scene.get("diagram")
+    if isinstance(visual, dict) and isinstance(visual.get("nodes"), list):
+        custom_nodes = []
+        for index, node in enumerate(visual["nodes"][:12]):
+            if not isinstance(node, dict):
+                continue
+            label = str(node.get("label", "")).strip()[:48]
+            if not label:
+                continue
+            custom_nodes.append({
+                "id": str(node.get("id", f"node-{index + 1}")),
+                "label": label,
+                "x": max(5, min(95, float(node.get("x", 12 + index * 20)))),
+                "y": max(12, min(82, float(node.get("y", 48)))),
+            })
+        if len(custom_nodes) >= 2:
+            raw_edges = visual.get("edges") if isinstance(visual.get("edges"), list) else []
+            custom_edges = [{"label": str(edge.get("label", "CONNECTS")).strip()[:32] or "CONNECTS"} for edge in raw_edges[:len(custom_nodes)-1] if isinstance(edge, dict)]
+            while len(custom_edges) < len(custom_nodes) - 1:
+                custom_edges.append({"label": "CONNECTS"})
+            accent = str(visual.get("accentColor", "#7187ff"))
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
+                accent = "#7187ff"
+            return {"type": "custom", "nodes": custom_nodes, "edges": custom_edges, "accentColor": accent}
     if any(term in kind for term in ("code", "کد")):
         return {"type": "code", "nodes": ["SOURCE CODE"], "edges": []}
     if any(term in kind for term in ("comparison", "مقایسه")) or any(
@@ -103,16 +127,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         nodes = spec["nodes"]
         if nodes and spec["type"] not in {"code", "comparison"}:
             count = len(nodes)
-            xs = [int(width * (0.09 + index * (0.82 / max(1, count - 1)))) for index in range(count)]
-            node_y = int(height * 0.49)
-            edge_y = int(height * 0.405)
-            for index, label in enumerate(nodes):
-                override = chr(92) + "an5" + chr(92) + f"pos({xs[index]},{node_y})"
+            if spec["type"] == "custom":
+                positions = [(int(width * node["x"] / 100), int(height * node["y"] / 100)) for node in nodes]
+                labels = [node["label"] for node in nodes]
+            else:
+                positions = [(int(width * (0.09 + index * (0.82 / max(1, count - 1)))), int(height * 0.49)) for index in range(count)]
+                labels = nodes
+            for (x, y), label in zip(positions, labels):
+                override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
                 events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{_ass_escape(label)}")
-            for index, label in enumerate(spec["edges"]):
-                if index + 1 < len(xs):
-                    midpoint = (xs[index] + xs[index + 1]) // 2
-                    override = chr(92) + "an5" + chr(92) + f"pos({midpoint},{edge_y})"
+            edge_labels = [edge["label"] for edge in spec["edges"]] if spec["type"] == "custom" else spec["edges"]
+            for index, label in enumerate(edge_labels):
+                if index + 1 < len(positions):
+                    midpoint = ((positions[index][0] + positions[index + 1][0]) // 2, (positions[index][1] + positions[index + 1][1]) // 2 - int(height * .055))
+                    override = chr(92) + "an5" + chr(92) + f"pos({midpoint[0]},{midpoint[1]})"
                     events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Edge,,0,0,0,,{{{override}}}{_ass_escape(label)}")
         elif spec["type"] == "code":
             override = chr(92) + "an5" + chr(92) + f"pos({int(width * .5)},{int(height * .265)})"
@@ -153,16 +181,26 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
         nodes = spec["nodes"]
         count = len(nodes)
         node_w, node_h = int(width * min(.19, .68 / count)), int(height * .14)
-        y = int(height * .43)
-        centers = [int(width * (.09 + index * (.82 / max(1, count - 1)))) for index in range(count)]
-        xs = [center - node_w // 2 for center in centers]
-        for x in xs:
-            filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x6478f5@0.28:t=fill")
-            filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x91a4ff@0.9:t=3")
-        for index in range(len(xs) - 1):
-            start_x = xs[index] + node_w
-            connector_w = max(1, xs[index + 1] - start_x)
-            filters.append(f"drawbox=x={start_x}:y={y + node_h // 2 - 3}:w={connector_w}:h=6:color=0x91a4ff@0.85:t=fill")
+        if visual_type == "custom":
+            positions = [(int(width * node["x"] / 100), int(height * node["y"] / 100)) for node in nodes]
+            accent = spec["accentColor"].lstrip("#")
+        else:
+            positions = [(int(width * (0.09 + index * (0.82 / max(1, count - 1))), int(height * .49)) for index in range(count)]
+            accent = "91a4ff"
+        boxes = []
+        for center_x, center_y in positions:
+            x, y = center_x - node_w // 2, center_y - node_h // 2
+            boxes.append((x, y))
+            filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x{accent}@0.22:t=fill")
+            filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x{accent}@0.95:t=3")
+        for index in range(len(boxes) - 1):
+            x1, y1 = positions[index]
+            x2, y2 = positions[index + 1]
+            left, right = sorted((x1, x2))
+            filters.append(f"drawbox=x={left}:y={y1-2}:w={max(1,right-left)}:h=4:color=0x{accent}@0.85:t=fill")
+            if y1 != y2:
+                top, bottom = sorted((y1, y2))
+                filters.append(f"drawbox=x={x2-2}:y={top}:w=4:h={max(1,bottom-top)}:color=0x{accent}@0.85:t=fill")
     elif visual_type == "code":
         x, y, w, h = int(width * .12), int(height * .2), int(width * .76), int(height * .6)
         filters.append(f"drawbox=x={x}:y={y}:w={w}:h={h}:color=0x0b1220@0.92:t=fill")
