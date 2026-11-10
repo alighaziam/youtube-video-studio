@@ -1,31 +1,59 @@
-name: CI
+name: YouTube Video Studio CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: youtube-video-studio-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
+    name: Backend tests (Python 3.11 + FFmpeg)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
-      - run: pip install -r backend/requirements.txt
-      - run: PYTHONPATH=backend pytest backend/tests -q
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install FFmpeg and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run backend tests
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest backend/tests -q -ra
+
   frontend:
+    name: Frontend production build (Node 20)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - run: npm install
-      - run: npm run build
+          node-version: "20"
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build frontend
+        run: npm run build
