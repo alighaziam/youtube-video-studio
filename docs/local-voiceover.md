@@ -36,7 +36,7 @@ The example names are illustrative; only models you actually download appear in 
 
 ## 3. Generate narration
 
-Restart the local API after installing the engine and models. The editor's **Local AI voice-over** section lists installed models. Paste your script, generate the storyboard, review each scene's narration, choose a voice, and select **Generate all scene voice-overs**.
+Restart the local API after installing the engine and models. The editor's **Local AI voice-over** section lists installed models. Paste your script, choose an installed voice, and select **Produce video automatically to final MP4**. The app creates the storyboard, synthesizes each scene, saves the voice assets and starts the MP4 render. You can also generate the storyboard separately first and edit each scene's narration before running the automatic production button.
 
 Each generated WAV is stored in the current project's local media library and linked to its scene. The MP4 renderer mixes those WAV files into the final video at the start time of each scene. If no scene has generated narration audio, the render remains silent.
 
