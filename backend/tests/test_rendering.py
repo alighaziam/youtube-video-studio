@@ -35,3 +35,16 @@ def test_scene_visual_templates_are_static_and_kind_specific() -> None:
     assert "drawbox" in architecture and "drawbox" in code and "drawbox" in comparison
     assert "zoompan" not in architecture + code + comparison
     assert "crop=1920:1080" in architecture
+
+
+
+def test_caption_timing_uses_generated_voice_duration() -> None:
+    result = _build_ass([{
+        "title": "Voice duration",
+        "duration": 10,
+        "captionDuration": 4.25,
+        "narration": "This narration should finish with its generated audio.",
+    }], 1920, 1080)
+    caption_lines = [line for line in result.splitlines() if ",Caption,," in line]
+    assert caption_lines
+    assert "0:00:04.25" in caption_lines[-1]
