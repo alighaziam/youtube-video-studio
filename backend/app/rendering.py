@@ -42,11 +42,14 @@ def _normalize_scene_layers(raw_layers: Any) -> list[dict[str, Any]]:
             except (TypeError, ValueError):
                 value = default
             return max(low, min(high, value))
+        x = number("x", 0, 0, 99)
+        y = number("y", 0, 0, 99)
+        width = number("width", 40, 1, 100 - x)
+        height = number("height", 25, 1, 100 - y)
         normalized.append({
             "id": str(raw.get("id", f"layer-{index + 1}"))[:80],
             "type": raw["type"], "name": str(raw.get("name", raw["type"]))[:80],
-            "x": number("x", 0, 0, 100), "y": number("y", 0, 0, 100),
-            "width": number("width", 40, 1, 100), "height": number("height", 25, 1, 100),
+            "x": x, "y": y, "width": width, "height": height,
             "zIndex": int(number("zIndex", index + 1, 0, 1000)),
             "opacity": number("opacity", 1, 0, 1), "visible": bool(raw.get("visible", True)),
             "content": str(raw.get("content", ""))[:6000], "assetId": str(raw.get("assetId", ""))[:128],
