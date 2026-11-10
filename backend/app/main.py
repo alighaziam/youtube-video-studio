@@ -13,6 +13,7 @@ from app.projects import router as projects_router
 from app.captions import router as captions_router
 from app.rendering import router as rendering_router
 from app.creator import router as creator_router
+from app.assets import router as assets_router
 
 
 class CapabilityReport(BaseModel):
@@ -29,6 +30,7 @@ app.include_router(projects_router)
 app.include_router(captions_router)
 app.include_router(rendering_router)
 app.include_router(creator_router)
+app.include_router(assets_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
