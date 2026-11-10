@@ -40,6 +40,12 @@ Restart the local API after installing the engine and models. The editor's **Loc
 
 Each generated WAV is stored in the current project's local media library and linked to its scene. The MP4 renderer mixes those WAV files into the final video at the start time of each scene. If no scene has generated narration audio, the render remains silent.
 
+## Add visuals to scenes
+
+Upload PNG/JPEG/WebP images or MP4/WebM clips to the Media Library. Select a scene, then choose its image/video from the **Scene media** selector. The renderer places that asset behind the scene title and timed narration captions. Images stay completely still; video clips play normally and loop if the scene is longer than the source clip. The renderer crops to fill the selected 16:9 or 9:16 frame, so keep important subjects near the center. Scenes without an attached asset use a dark designed background; Architecture/Diagram, Code and Comparison scene types receive different static geometric templates. No automatic zoom or pan is applied.
+
+Captions are divided into sentence/12-word chunks and timed proportionally by word count. This is a readable approximation, not precise word-level speech alignment; review subtitles before publishing.
+
 ## Notes
 
 - Voice generation is local and can be slower on CPU, particularly for long scripts.
