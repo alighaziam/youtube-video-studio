@@ -20,7 +20,7 @@ Create the local model directory:
 mkdir -p .data/voices
 ```
 
-Download a Piper `.onnx` model and its matching `.onnx.json` metadata file from the official Piper voice collection. Read and follow the voice's license before using it, especially for monetized videos. Place both files directly in `.data/voices`.
+Download a Piper `.onnx` model and its matching `.onnx.json` metadata file from the [Piper voice collection](https://huggingface.co/rhasspy/piper-voices). Read and follow the voice's license before using it, especially for monetized videos. Place both files directly in `.data/voices`.
 
 Example layout:
 
