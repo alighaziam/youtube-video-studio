@@ -33,7 +33,7 @@ Updated: 2026-11-10
 ## Next implementation order
 
 1. Add a multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom.
-3. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
+2. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
 4. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
 5. Complete caption editing, styling, overlay preview and verified Persian shaping.
 6. Persist render jobs and add progress, cancellation, retry and output validation.
