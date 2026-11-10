@@ -14,7 +14,7 @@ Updated: 2026-11-10
 | MP4 audio mix | Initial | FFmpeg mixes generated scene narration at scene offsets, extends scene timing when narration exceeds its planned duration, and validates the final MP4 |
 | Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
 | Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
-| MP4 rendering | Initial | FFmpeg scene composition for attached images/videos; deterministic semantic diagrams for event-driven, API gateway, data flow, modular monolith, microservices and request-sequence scenes; code/comparison layouts, timed overlays, narration mix, 16:9 and 9:16 profiles, ffprobe validation and download |
+| MP4 rendering | Initial | FFmpeg scene composition for attached images/videos; deterministic semantic diagrams; independent scene layers with position, size, z-order, visibility and opacity; timed overlays, narration mix, 16:9 and 9:16 profiles, ffprobe validation and download |
 | Capability detection | Implemented | FFmpeg, ffprobe, subtitles filter and libx264 checks |
 | CI workflow | Configured | Backend pytest and frontend TypeScript/Vite build; recent GitHub Actions runs reported startup_failure without creating jobs, so latest CI result is not verified |
 
@@ -58,3 +58,12 @@ A phase is not complete merely because files are committed. It needs passing aut
 - The editor preview reads the same saved scene diagram model. The FFmpeg renderer consumes that model for node positions, labels, connectors and accent color.
 - Custom diagram data is bounded and sanitized on the rendering side (maximum 12 nodes, bounded coordinates and validated hex color). The feature remains static: no automatic zoom or pan.
 - Automated tests were added for custom diagram labels, positions, edge text and color. Runtime execution and visual QA remain pending while GitHub Actions startup failures persist.
+
+
+## Multi-layer canvas (2026-11-10)
+
+- Scenes can store independent image, video, text, code and diagram layer records in the existing project document; no database migration is needed.
+- The editor provides layer creation, media assignment, visibility, deletion, z-order controls, percentage-based X/Y/width/height, opacity and editable text/code content.
+- Layer transforms are percentage-based and are intended to remain stable across 16:9 and 9:16 output profiles. The canvas is static; there is no automatic zoom or pan.
+- Frontend preview supports the layer stack. FFmpeg rendering supports normalized layer metadata and visible text/code overlays; image/video compositing is wired in a subsequent renderer step and must not be considered complete until its end-to-end checks pass.
+- Runtime tests and visual QA remain pending; the latest GitHub Actions startup_failure must be resolved before claiming CI success.
