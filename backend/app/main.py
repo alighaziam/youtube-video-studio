@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.projects import router as projects_router
+from app.captions import router as captions_router
 
 
 class CapabilityReport(BaseModel):
@@ -23,6 +24,7 @@ class CapabilityReport(BaseModel):
 
 app = FastAPI(title="YouTube Video Production Studio API", version="0.2.0")
 app.include_router(projects_router)
+app.include_router(captions_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
