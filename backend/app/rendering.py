@@ -160,6 +160,8 @@ Style: Title,DejaVu Sans,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,
 Style: Caption,DejaVu Sans,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
 Style: Diagram,DejaVu Sans,{int(height * 0.024)},&H00E8F0FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,1,5,20,20,20,1
 Style: Edge,DejaVu Sans,{int(height * 0.016)},&H00B9C9FF,&H000000FF,&H00101827,&H90101827,1,0,1,1,0,5,10,10,10,1
+Style: LayerText,DejaVu Sans,{int(height * 0.034)},&H00F4F6FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,0,5,12,12,12,1
+Style: LayerCode,DejaVu Sans Mono,{int(height * 0.019)},&H00A9E6D4,&H000000FF,&H000A1020,&H900A1020,1,0,1,2,0,7,12,12,12,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -196,6 +198,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             for label, x in (("OPTION A", int(width * .28)), ("OPTION B", int(width * .72))):
                 override = chr(92) + "an5" + chr(92) + f"pos({x},{int(height * .5)})"
                 events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{label}")
+        for layer in _normalize_scene_layers(scene.get("layers")):
+            if not layer["visible"] or layer["type"] not in {"text", "code", "diagram"}:
+                continue
+            content = layer["content"].strip()
+            if not content:
+                continue
+            x = int(width * (layer["x"] + layer["width"] / 2) / 100)
+            y = int(height * (layer["y"] + layer["height"] / 2) / 100)
+            style = "LayerCode" if layer["type"] == "code" else "LayerText"
+            override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
+            if layer["opacity"] < 1:
+                alpha = round((1 - layer["opacity"]) * 255)
+                override += chr(92) + f"alpha&H{alpha:02X}&"
+            event_layer = 3 + min(20, layer["zIndex"])
+            events.append(f"Dialogue: {event_layer},{_ass_time(cursor)},{_ass_time(cursor + duration)},{style},,0,0,0,,{{{override}}}{_ass_escape(content)}")
         narration = str(scene.get("narration") or scene.get("body") or "").strip()
         if narration:
             caption_duration = min(float(duration), max(0.5, float(scene.get("captionDuration", duration))))
