@@ -120,6 +120,7 @@ export default function App() {
       const response = await fetch(`${API}/projects/${project.id}/assets/${assetId}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Could not delete asset");
       setAssets(current => current.filter(asset => asset.id !== assetId));
+      setScenes(current => current.map(scene => scene.assetId === assetId ? { ...scene, assetId: undefined } : scene));
     } catch (reason) { setAssetError(reason instanceof Error ? reason.message : "Delete failed"); }
   };
   const assetUrl = (assetId: string) => `${API}/projects/${project?.id}/assets/${assetId}/file`;
