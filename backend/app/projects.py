@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,19 +33,24 @@ def _db_path(request: Request) -> Path:
     return path
 
 
-def _connect(request: Request) -> sqlite3.Connection:
+@contextmanager
+def _connect(request: Request):
     connection = sqlite3.connect(_db_path(request))
     connection.row_factory = sqlite3.Row
-    connection.execute(
-        """CREATE TABLE IF NOT EXISTS projects (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            document_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )"""
-    )
-    return connection
+    try:
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                document_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )"""
+        )
+        yield connection
+        connection.commit()
+    finally:
+        connection.close()
 
 
 class ProjectCreate(BaseModel):
