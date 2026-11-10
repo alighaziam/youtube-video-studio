@@ -149,6 +149,11 @@ def _infer_visual_spec(scene: dict[str, Any]) -> dict[str, Any]:
     return {"type": "concept", "nodes": [], "edges": []}
 
 
+def _split_diagram_labels(content: str) -> list[str]:
+    """Split a compact diagram expression into bounded node labels."""
+    return [part.strip() for part in re.split(r"\s*(?:→|->|\|)\s*", content) if part.strip()][:8]
+
+
 def _build_ass(scenes: list[dict[str, Any]], width: int, height: int) -> str:
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -210,7 +215,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             style = "LayerCode" if layer["type"] == "code" else "LayerText"
             event_layer = 3 + min(20, layer["zIndex"])
             if layer["type"] == "diagram":
-                labels = [part.strip() for part in re.split(r"\\s*(?:→|->|\\|)\\s*", content) if part.strip()][:8]
+                labels = _split_diagram_labels(content)
                 for node_index, label in enumerate(labels):
                     fraction = (node_index + 0.5) / max(1, len(labels))
                     x = int(width * (layer["x"] + layer["width"] * fraction) / 100)
