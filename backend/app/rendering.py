@@ -71,7 +71,7 @@ def _set_job(job_id: str, **values: Any) -> None:
         _jobs[job_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
 
 
-def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int) -> None:
+def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
     try:
         ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
         if not ffmpeg or not ffprobe:
@@ -91,6 +91,25 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
         target_dir.mkdir(parents=True, exist_ok=True)
         safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in title).strip("-")[:48] or "video"
         final_path = target_dir / f"{safe_name}-{job_id[:8]}.mp4"
+        media_root = Path(assets_dir or (Path(db_path).parent / "assets")).resolve()
+        voice_inputs: list[tuple[Path, int]] = []
+        elapsed = 0
+        with sqlite3.connect(db_path) as db:
+            has_assets = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='assets'").fetchone()
+            asset_rows = {row[0]: row[1] for row in db.execute(
+                "SELECT id, relative_path FROM assets WHERE project_id = ?", (project_id,)
+            ).fetchall()} if has_assets else {}
+        for scene in scenes:
+            voice_id = scene.get("voiceAssetId")
+            if voice_id:
+                relative = asset_rows.get(voice_id)
+                if not relative:
+                    raise RuntimeError(f"Voice-over asset {voice_id} is missing from this project.")
+                voice_path = (media_root / relative).resolve()
+                if media_root not in voice_path.parents or not voice_path.is_file():
+                    raise RuntimeError(f"Voice-over file for scene '{scene.get('title', '')}' is missing.")
+                voice_inputs.append((voice_path, elapsed * 1000))
+            elapsed += max(1, min(3600, int(scene.get("duration", 5))))
         with tempfile.TemporaryDirectory(prefix="framelab-render-") as temp:
             temp_dir = Path(temp)
             (temp_dir / "captions.ass").write_text(_build_ass(scenes, width, height), encoding="utf-8")
@@ -100,9 +119,24 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 "-f", "lavfi", "-i",
                 f"color=c=0x111827:s={width}x{height}:r={fps}:d={total_duration}",
                 "-vf", "subtitles=captions.ass:force_style='Alignment=5'",
-                "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary_output),
             ]
+            for voice_path, _delay in voice_inputs:
+                command.extend(["-i", str(voice_path)])
+            if voice_inputs:
+                filters = []
+                labels = []
+                for index, (_voice_path, delay_ms) in enumerate(voice_inputs, start=1):
+                    label = f"voice{index}"
+                    filters.append(f"[{index}:a]aresample=48000,adelay={delay_ms}|{delay_ms},apad[{label}]")
+                    labels.append(f"[{label}]")
+                filters.append("".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0,alimiter=limit=0.95[aout]")
+                command.extend(["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]", "-c:a", "aac", "-b:a", "192k"])
+            else:
+                command.extend(["-an"])
+            command.extend([
+                "-t", str(total_duration), "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary_output),
+            ])
             process = subprocess.run(command, cwd=temp_dir, capture_output=True, text=True, check=False)
             if process.returncode != 0 or not temporary_output.exists():
                 raise RuntimeError(process.stderr.strip() or "FFmpeg render failed.")
@@ -141,7 +175,7 @@ def create_render(project_id: str, payload: RenderRequest, background: Backgroun
         _jobs[job_id] = {"id": job_id, "project_id": project_id, "status": "queued",
                          "created_at": now, "updated_at": now, "output_path": None, "error": None}
     output_dir = str(Path(getattr(request.app.state, "render_dir", Path(".data/renders"))))
-    background.add_task(_render, job_id, str(db_path), output_dir, project_id, payload.profile, payload.fps)
+    background.add_task(_render, job_id, str(db_path), output_dir, project_id, payload.profile, payload.fps, str(Path(getattr(request.app.state, "assets_dir", Path(".data/assets")))))
     return {"job_id": job_id, "status": "queued"}
 
 
