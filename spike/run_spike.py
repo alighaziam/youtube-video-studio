@@ -60,7 +60,8 @@ def main() -> int:
     report["filter_check"] = {
         "returncode": filters["returncode"],
         "subtitles_filter_available": any(
-            line.split()[-1:] == ["subtitles"] for line in filters["stdout"].splitlines()
+            len(parts := line.split()) > 1 and parts[1] == "subtitles"
+            for line in filters["stdout"].splitlines()
         ),
     }
 
