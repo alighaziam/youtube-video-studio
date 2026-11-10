@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Scene = { id: string; title: string; kind: string; duration: number; narration?: string };
-type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[] } };
+type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
+type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
 const API = "http://127.0.0.1:8000/api/v1";
 const starterScenes: Scene[] = [
   { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12 },
@@ -29,6 +30,9 @@ export default function App() {
   const [scriptText, setScriptText] = useState("");
   const [scriptBusy, setScriptBusy] = useState(false);
   const [publishingPack, setPublishingPack] = useState("");
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetBusy, setAssetBusy] = useState(false);
+  const [assetError, setAssetError] = useState("");
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
@@ -85,6 +89,40 @@ export default function App() {
     }, 650);
     return () => window.clearTimeout(timer);
   }, [scenes, hydrated, project?.id]);
+
+
+  useEffect(() => {
+    if (!project) return;
+    let alive = true;
+    fetch(`${API}/projects/${project.id}/assets`)
+      .then(async response => { if (!response.ok) throw new Error("Could not load media library"); return response.json() as Promise<Asset[]>; })
+      .then(items => { if (alive) setAssets(items); })
+      .catch(reason => { if (alive) setAssetError(reason instanceof Error ? reason.message : "Media library error"); });
+    return () => { alive = false; };
+  }, [project?.id]);
+
+  const uploadAsset = async (file?: File) => {
+    if (!project || !file) return;
+    setAssetBusy(true); setAssetError("");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const response = await fetch(`${API}/projects/${project.id}/assets`, { method: "POST", body: form });
+      if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail ?? "Upload failed"); }
+      const item = await response.json(); setAssets(current => [item, ...current]);
+    } catch (reason) { setAssetError(reason instanceof Error ? reason.message : "Upload failed"); }
+    finally { setAssetBusy(false); }
+  };
+
+  const removeAsset = async (assetId: string) => {
+    if (!project) return;
+    try {
+      const response = await fetch(`${API}/projects/${project.id}/assets/${assetId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not delete asset");
+      setAssets(current => current.filter(asset => asset.id !== assetId));
+    } catch (reason) { setAssetError(reason instanceof Error ? reason.message : "Delete failed"); }
+  };
+  const assetUrl = (assetId: string) => `${API}/projects/${project?.id}/assets/${assetId}/file`;
+  const formatBytes = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
   const addScene = () => {
     const next: Scene = { id: `scene-${crypto.randomUUID()}`, title: fa ? "صحنه جدید" : "New scene", kind: fa ? "مفهوم" : "Concept", duration: 20 };
@@ -163,6 +201,19 @@ export default function App() {
         <div className="heading"><div><small>STORYBOARD</small><h2>{fa ? "صحنه‌های ویدیو" : "Video scenes"} <em>{String(scenes.length).padStart(2,"0")}</em></h2></div><button onClick={addScene}>＋</button></div>
         <textarea className="script-input" value={scriptText} onChange={event=>setScriptText(event.target.value)} placeholder={fa ? "سناریوی درس را اینجا وارد کن؛ هر پاراگراف یک صحنه می‌شود..." : "Paste your lesson script. Each paragraph becomes a scene..."} />
         <button className="add script-button" onClick={generateStoryboard} disabled={scriptBusy || !scriptText.trim()}>{scriptBusy ? (fa ? "در حال ساخت..." : "Generating...") : (fa ? "تبدیل سناریو به استوری‌بورد" : "Generate storyboard from script")}</button>
+        <div className="media-library">
+          <div className="media-heading"><b>{fa ? "کتابخانه رسانه" : "Media library"}</b><span>{assets.length}</span></div>
+          <label className="upload-control">{assetBusy ? (fa ? "در حال بارگذاری..." : "Uploading...") : (fa ? "＋ افزودن تصویر / ویدیو / صدا" : "＋ Add image / video / audio")}
+            <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/ogg" disabled={assetBusy} onChange={event => { void uploadAsset(event.target.files?.[0]); event.currentTarget.value = ""; }}/>
+          </label>
+          <small className="media-limit">{fa ? "حداکثر حجم هر فایل: ۲۵۰ مگابایت · ذخیره محلی پروژه" : "250 MB max per file · stored with this local project"}</small>
+          {assetError && <div className="media-error">{assetError}</div>}
+          {assets.length === 0 ? <p className="media-empty">{fa ? "هنوز رسانه‌ای اضافه نشده است." : "No media uploaded yet."}</p> : <div className="asset-list">{assets.map(asset => <div className="asset-item" key={asset.id}>
+            <div className="asset-preview">{asset.mime_type.startsWith("image/") ? <img src={assetUrl(asset.id)} alt={asset.name}/> : asset.mime_type.startsWith("video/") ? "▶" : "♫"}</div>
+            <div className="asset-meta"><b title={asset.name}>{asset.name}</b><small>{asset.mime_type} · {formatBytes(asset.size_bytes)}</small></div>
+            <button title={fa ? "حذف فایل" : "Delete file"} onClick={() => void removeAsset(asset.id)}>×</button>
+          </div>)}</div>}
+        </div>
         {scenes.map((scene,i)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"scene selected":"scene"}><span className="thumb">{String(i+1).padStart(2,"0")}<b>{["✧","▤","⌘","{ }","✓"][i%5]}</b></span><span className="scene-text"><strong>{scene.title}</strong><small>{scene.kind}</small><small>{formatTime(scene.duration)}</small></span><span className="dots">···</span></button>)}
         <button className="add" onClick={addScene}>＋　{fa ? "افزودن صحنه" : "Add scene"}</button>
         <div className="hint">✧ {fa ? "تغییرات استوری‌بورد به‌صورت خودکار در پایگاه داده محلی ذخیره می‌شود." : "Storyboard changes are autosaved to your local database."}</div>
