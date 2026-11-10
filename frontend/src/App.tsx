@@ -250,7 +250,15 @@ export default function App() {
   };
   const updateLayer = (id: string, patch: Partial<SceneLayer>) => {
     if (!selected) return;
-    updateSelected({ layers: (selected.layers ?? []).map(layer => layer.id === id ? { ...layer, ...patch } : layer) });
+    updateSelected({ layers: (selected.layers ?? []).map(layer => {
+      if (layer.id !== id) return layer;
+      const updated = { ...layer, ...patch };
+      updated.x = Math.max(0, Math.min(99, updated.x));
+      updated.y = Math.max(0, Math.min(99, updated.y));
+      updated.width = Math.max(1, Math.min(100 - updated.x, updated.width));
+      updated.height = Math.max(1, Math.min(100 - updated.y, updated.height));
+      return updated;
+    }) });
   };
   const moveLayer = (id: string, direction: -1 | 1) => {
     if (!selected) return;
