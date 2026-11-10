@@ -52,4 +52,28 @@ The product is designed for creators who want professional motion-slide videos w
 
 Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The first React editor shell and FastAPI health/capability endpoints are now scaffolded. The current editor is a UI prototype: scene selection, language switch, inspector tabs, and a static storyboard preview work locally in the browser, while project persistence, real timeline editing, audio, subtitles, and rendering are still pending.
 
+## Run locally
+
+Requirements: Python 3.11+, Node.js 20+, npm. FFmpeg is optional for this current project/storyboard milestone and will be required for media rendering.
+
+Linux:
+```bash
+./scripts/start-dev.sh
+source .venv/bin/activate
+uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+Windows PowerShell:
+```powershell
+.\\scripts\\start-dev.ps1
+.\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+In a second terminal:
+```bash
+npm --prefix frontend run dev
+```
+
+Open http://127.0.0.1:5173. Project metadata and the versioned storyboard document are stored in the local SQLite database at `.data/studio.sqlite3`. The current API supports project create/list/read/update/delete. The editor autosaves scene title, type, and duration through the local API. Do not expose the API port to a public network.
+
 See [the roadmap](docs/roadmap.md) for phase gates.
