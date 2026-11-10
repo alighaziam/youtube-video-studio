@@ -103,3 +103,35 @@ def test_semantic_visual_filters_remain_static_and_support_four_nodes() -> None:
     assert event.count("drawbox") >= 10
     assert "zoompan" not in event
     assert "crop=1080:1920" in event
+
+
+
+def test_custom_diagram_nodes_edges_positions_and_color_are_used() -> None:
+    from app.rendering import _infer_visual_spec
+
+    scene = {
+        "kind": "Architecture diagram",
+        "title": "Custom architecture",
+        "diagram": {
+            "nodes": [
+                {"id": "a", "label": "WEB CLIENT", "x": 18, "y": 30},
+                {"id": "b", "label": "ORDER API", "x": 70, "y": 65},
+            ],
+            "edges": [{"label": "SUBMITS"}],
+            "accentColor": "#22aa88",
+        },
+    }
+    spec = _infer_visual_spec(scene)
+    assert spec["type"] == "custom"
+    assert spec["nodes"][0]["x"] == 18
+    assert spec["edges"][0]["label"] == "SUBMITS"
+    assert spec["accentColor"] == "#22aa88"
+
+    ass = _build_ass([scene], 1920, 1080)
+    assert "WEB CLIENT" in ass and "ORDER API" in ass and "SUBMITS" in ass
+    assert r"pos(345,324)" in ass
+    assert r"pos(1344,702)" in ass
+
+    filters = _scene_visual_filter(scene, 1920, 1080, 30)
+    assert "0x22aa88" in filters
+    assert "drawbox=x=345" in filters
