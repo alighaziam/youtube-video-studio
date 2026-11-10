@@ -19,7 +19,7 @@ def test_ass_document_contains_timed_scene_events() -> None:
 
 
 def test_ass_splits_narration_into_readable_timed_caption_chunks() -> None:
-    narration = " ".join(f"word{index}." for index in range(25))
+    narration = " ".join(f"word{index}" for index in range(24)) + "."
     result = _build_ass([{"title": "Caption test", "duration": 10, "narration": narration}], 1920, 1080)
     caption_lines = [line for line in result.splitlines() if ",Caption,," in line]
     assert len(caption_lines) == 3
