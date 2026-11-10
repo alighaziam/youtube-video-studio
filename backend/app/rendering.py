@@ -231,7 +231,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
             command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(base_video)]
             for voice_path, _delay in voice_inputs:
                 command.extend(["-i", str(voice_path)])
-            command.extend(["-vf", f"subtitles={captions_path.as_posix()}:force_style='Alignment=5'"])
+            command.extend(["-vf", f"subtitles={captions_path.name}:force_style='Alignment=5'"])
             if voice_inputs:
                 filters, labels = [], []
                 for index, (_voice_path, delay_ms) in enumerate(voice_inputs, start=1):
@@ -246,7 +246,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 "-t", str(total_duration), "-c:v", "libx264", "-preset", "medium", "-crf", "20",
                 "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary_output),
             ])
-            process = subprocess.run(command, capture_output=True, text=True, check=False)
+            process = subprocess.run(command, cwd=temp_dir, capture_output=True, text=True, check=False)
             if process.returncode != 0 or not temporary_output.exists():
                 raise RuntimeError(process.stderr.strip() or "FFmpeg render failed.")
             probe = subprocess.run(
