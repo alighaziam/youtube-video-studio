@@ -68,14 +68,6 @@ def main() -> int:
     if not report["filter_check"]["subtitles_filter_available"]:
         report["error"] = "FFmpeg does not expose the subtitles filter (libass)"
     else:
-        # Run from the spike directory so the ASS path does not need platform-specific escaping.
-        render = run([
-            ffmpeg, "-y", "-hide_banner", "-loglevel", "warning",
-            "-f", "lavfi", "-i", "color=c=0x20252b:s=1280x720:r=30:d=3",
-            "-vf", "subtitles=persian_subtitle.ass",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
-            str(VIDEO_PATH),
-        ]) if False else None
         try:
             result = subprocess.run(
                 [
