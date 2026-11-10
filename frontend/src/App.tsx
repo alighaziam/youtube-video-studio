@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 
 type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string };
 type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
-type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };\ntype Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
+type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
+type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
 const API = "http://127.0.0.1:8000/api/v1";
 const starterScenes: Scene[] = [
   { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12 },
@@ -32,11 +33,16 @@ export default function App() {
   const [publishingPack, setPublishingPack] = useState("");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetBusy, setAssetBusy] = useState(false);
-  const [assetError, setAssetError] = useState("");\n  const [voices, setVoices] = useState<Voice[]>([]);\n  const [voiceId, setVoiceId] = useState("");\n  const [voiceBusy, setVoiceBusy] = useState(false);\n  const [voiceError, setVoiceError] = useState("");
+  const [assetError, setAssetError] = useState("");
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [voiceId, setVoiceId] = useState("");
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
-  const selectedAsset = assets.find(asset => asset.id === selected?.assetId);\n  const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
+  const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
+  const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
 
   useEffect(() => {
     let alive = true;
