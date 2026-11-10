@@ -39,6 +39,7 @@ export default function App() {
   const [voiceEngineAvailable, setVoiceEngineAvailable] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [voiceProgress, setVoiceProgress] = useState("");
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
@@ -118,7 +119,7 @@ export default function App() {
 
   const generateVoiceovers = async () => {
     if (!project || !voiceId || !voiceEngineAvailable || voiceBusy) return;
-    setVoiceBusy(true); setVoiceError(""); setRenderMessage(""); setRenderDownloadUrl("");
+    setVoiceBusy(true); setVoiceError(""); setVoiceProgress(""); setRenderMessage(""); setRenderDownloadUrl("");
     try {
       let workingScenes = scenes;
       if (scriptText.trim()) {
@@ -136,13 +137,19 @@ export default function App() {
       }
       const eligible = workingScenes.filter(scene => scene.narration?.trim());
       if (!eligible.length) throw new Error(fa ? "ابتدا متن سناریو یا متن گویندگی صحنه‌ها را وارد کن." : "Enter a script or scene narration first.");
-      const voiceResponse = await fetch(`${API}/projects/${project.id}/voiceovers`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voice_id: voiceId, scene_ids: eligible.map(scene => scene.id) }),
-      });
-      const voiceResult = await voiceResponse.json();
-      if (!voiceResponse.ok) throw new Error(voiceResult.detail ?? "Voice generation failed");
-      const mapping = new Map<string, string>(voiceResult.generated.map((item: {scene_id:string;asset:{id:string}}) => [item.scene_id, item.asset.id]));
+      const mapping = new Map<string, string>();
+      const batches = Math.ceil(eligible.length / 30);
+      for (let batch = 0; batch < batches; batch++) {
+        setVoiceProgress(fa ? `تولید صدا: بخش ${batch + 1} از ${batches}` : `Generating voice batch ${batch + 1} of ${batches}`);
+        const batchScenes = eligible.slice(batch * 30, (batch + 1) * 30);
+        const voiceResponse = await fetch(`${API}/projects/${project.id}/voiceovers`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ voice_id: voiceId, scene_ids: batchScenes.map(scene => scene.id) }),
+        });
+        const voiceResult = await voiceResponse.json();
+        if (!voiceResponse.ok) throw new Error(voiceResult.detail ?? "Voice generation failed");
+        for (const item of voiceResult.generated as {scene_id:string;asset:{id:string}}[]) mapping.set(item.scene_id, item.asset.id);
+      }
       const finalScenes = workingScenes.map(scene => mapping.has(scene.id) ? { ...scene, voiceAssetId: mapping.get(scene.id) } : scene);
       setScenes(finalScenes);
       const saveResponse = await fetch(`${API}/projects/${project.id}`, {
@@ -164,7 +171,7 @@ export default function App() {
     } catch (reason) {
       setRenderState("failed");
       setVoiceError(reason instanceof Error ? reason.message : "Automatic video production failed");
-    } finally { setVoiceBusy(false); }
+    } finally { setVoiceBusy(false); setVoiceProgress(""); }
   };
 
   const uploadAsset = async (file?: File) => {
@@ -274,7 +281,7 @@ export default function App() {
             {voices.length ? voices.map(voice=><option key={voice.id} value={voice.id}>{voice.name}{voice.language ? " · "+voice.language : ""}</option>) : <option value="">{fa ? "صدای محلی نصب نشده" : "No local voices installed"}</option>}
           </select>
           <button className="add voice-button" onClick={()=>void generateVoiceovers()} disabled={!voiceId || !voiceEngineAvailable || voiceBusy || renderState === "queued" || renderState === "running" || (!scriptText.trim() && !scenes.some(scene=>scene.narration?.trim()))}>{voiceBusy ? (fa ? "در حال تولید صدا و رندر ویدیو..." : "Generating voice and rendering video...") : (fa ? "تولید خودکار ویدیو تا MP4 نهایی" : "Produce video automatically to final MP4")}</button>
-          {voiceError && <div className="media-error">{voiceError}</div>}
+          {voiceProgress && <small className="media-limit">{voiceProgress}</small>}{voiceError && <div className="media-error">{voiceError}</div>}
           {(!voices.length || !voiceEngineAvailable) && <small className="media-limit">{!voiceEngineAvailable ? (fa ? "موتور Piper نصب یا در PATH پیدا نشده است؛ راهنمای نصب را ببین." : "Piper is not installed or not available on PATH; see setup guide.") : (fa ? "مدل صدای محلی نصب نشده است؛ راهنمای نصب را ببین." : "No local voice models installed; see setup guide.")}</small>}
         </div>
         <div className="media-library">
