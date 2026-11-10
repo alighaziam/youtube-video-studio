@@ -9,7 +9,7 @@ Updated: 2026-11-10
 | React/TypeScript editor shell | Initial | RTL/LTR, scene list, inspector, responsive dark UI |
 | Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |
 | Script-to-storyboard | Initial | Converts paragraphs/sentences to suggested scenes; editable title, type, duration and narration |
-| Project media library | Initial | Frontend upload/list/delete; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
+| Project media library | Initial | Frontend upload/list/delete; image previews; scene-level media references and image/video preview; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
 | Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
 | Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
 | MP4 rendering | Initial | FFmpeg timed title cards, 16:9 and 9:16 profiles, ffprobe validation and download |
@@ -20,7 +20,7 @@ Updated: 2026-11-10
 
 - Rendering is still timed text cards on a solid background, not a full composition engine for saved scene layers.
 - The preview remains a sample composition and is not WYSIWYG.
-- Media files can be uploaded, listed, previewed when images, downloaded through the API, and deleted; they are not yet attachable to scene layers or timeline clips.
+- Media files can be attached to scenes and image/video assets preview in the stage. The renderer does not yet compose these attachments into the exported MP4; audio attachments are not mixed into output.
 - Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
 - Audio recording/import, waveform, trim, mix, noise reduction, loudness normalization and render audio mux are not implemented.
 - Subtitle editor, style controls, preview overlay and Persian visual QA are incomplete.
