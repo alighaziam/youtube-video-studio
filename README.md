@@ -50,6 +50,6 @@ The product is designed for creators who want professional motion-slide videos w
 
 ## Project status
 
-Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The editor and rendering pipeline are not yet complete.
+Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The first React editor shell and FastAPI health/capability endpoints are now scaffolded. The current editor is a UI prototype: scene selection, language switch, inspector tabs, and a static storyboard preview work locally in the browser, while project persistence, real timeline editing, audio, subtitles, and rendering are still pending.
 
 See [the roadmap](docs/roadmap.md) for phase gates.
