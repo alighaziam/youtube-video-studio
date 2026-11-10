@@ -63,7 +63,7 @@ A phase is not complete merely because files are committed. It needs passing aut
 ## Multi-layer canvas (2026-11-10)
 
 - Scenes can store independent image, video, text, code and diagram layer records in the existing project document; no database migration is needed.
-- The editor provides layer creation, media assignment, visibility, deletion, z-order controls, percentage-based X/Y/width/height, opacity and editable text/code content.
+- The editor provides layer creation, media assignment, visibility, deletion, z-order controls, percentage-based X/Y/width/height, opacity and editable text/code/diagram content.
 - Layer transforms are percentage-based and are intended to remain stable across 16:9 and 9:16 output profiles. The canvas is static; there is no automatic zoom or pan.
-- Frontend preview supports the layer stack. FFmpeg rendering supports normalized layer metadata and visible text/code overlays; image/video compositing is wired in a subsequent renderer step and must not be considered complete until its end-to-end checks pass.
+- Frontend preview supports the layer stack. FFmpeg rendering normalizes layer metadata, draws visible text/code/diagram layers as timed ASS overlays, and composites image/video layers with scaled, opacity-aware overlays in z-order. The output remains static apart from intentionally supplied video media.
 - Runtime tests and visual QA remain pending; the latest GitHub Actions startup_failure must be resolved before claiming CI success.
