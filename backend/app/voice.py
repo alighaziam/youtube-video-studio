@@ -108,11 +108,18 @@ def generate_voiceovers(project_id: str, payload: VoiceoverRequest, request: Req
         asset_id = str(uuid.uuid4())
         filename = f"voice-{asset_id}.wav"
         output = project_dir / filename
-        result = subprocess.run(
-            [binary, "--model", str(model), "--output_file", str(output)],
-            input=str(scene["narration"]).strip(),
-            capture_output=True, text=True, check=False, timeout=300,
-        )
+        try:
+            result = subprocess.run(
+                [binary, "--model", str(model), "--output_file", str(output)],
+                input=str(scene["narration"]).strip(),
+                capture_output=True, text=True, check=False, timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            output.unlink(missing_ok=True)
+            raise HTTPException(status_code=504, detail="Local voice generation timed out after five minutes.")
+        except OSError as exc:
+            output.unlink(missing_ok=True)
+            raise HTTPException(status_code=503, detail=f"Could not start Piper: {exc}") from exc
         if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
             output.unlink(missing_ok=True)
             raise HTTPException(status_code=502, detail=(result.stderr.strip() or "Piper voice generation failed.")[-1200:])
