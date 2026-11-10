@@ -54,9 +54,9 @@ def _infer_visual_spec(scene: dict[str, Any]) -> dict[str, Any]:
     patterns = [
         ("event_driven", ("event-driven", "event driven", "kafka", "rabbitmq", "message broker", "event bus", "رویدادمحور", "رویداد محور", "کارگزار پیام", "بروکر", "پیام رویداد")),
         ("api_gateway", ("api gateway", "gateway", "گیت‌وی", "گیت وی", "درگاه api")),
-        ("data_flow", ("database", "postgres", "postgresql", "mysql", "persistence", "data access", "دیتابیس", "پایگاه داده", "ذخیره‌سازی", "ذخیره سازی")),
         ("modular_monolith", ("modular monolith", "ماژولار مونولیت", "مونولیت ماژولار")),
         ("microservices", ("microservices", "microservice", "میکروسرویس", "میکرو سرویس")),
+        ("data_flow", ("database", "postgres", "postgresql", "mysql", "persistence", "data access", "دیتابیس", "پایگاه داده", "ذخیره‌سازی", "ذخیره سازی")),
         ("sequence", ("sequence diagram", "request flow", "authentication", "oauth", "login flow", "توالی درخواست", "جریان درخواست", "احراز هویت", "ورود کاربر")),
     ]
     selected = next((name for name, terms in patterns if any(term in text for term in terms)), None)
@@ -71,7 +71,7 @@ def _infer_visual_spec(scene: dict[str, Any]) -> dict[str, Any]:
     if selected:
         return specs[selected]
     if any(term in kind or term in text for term in ("architecture", "diagram", "معماری", "دیاگرام", "service", "سرویس", "module", "ماژول")):
-        return {"type": "request_flow", "nodes": ["CLIENT", "APPLICATION", "DATABASE"], "edges": ["REQUEST", "QUERY"]}
+        return {"type": "request_flow", "nodes": ["CLIENT", "API", "DATA"], "edges": ["REQUEST", "QUERY"]}
     return {"type": "concept", "nodes": [], "edges": []}
 
 
