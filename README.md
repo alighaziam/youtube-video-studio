@@ -50,7 +50,7 @@ The product is designed for creators who want professional motion-slide videos w
 
 ## Project status
 
-Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The first React editor shell and FastAPI health/capability endpoints are now scaffolded. The current editor is a UI prototype: scene selection, language switch, inspector tabs, and a static storyboard preview work locally in the browser, while project persistence, real timeline editing, audio, subtitles, and rendering are still pending.
+Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The first working vertical slice is implemented: React editor shell with editable storyboard scenes and debounced autosave, FastAPI project CRUD backed by SQLite, SRT/VTT caption import/export, and an asynchronous FFmpeg text-scene MP4 render endpoint for landscape and Shorts profiles. The renderer currently creates timed title cards on a dark background; it is not yet the full layer compositor. Audio tracks, media upload, waveform editing, local TTS/transcription, rich diagram/code layers, transitions, render cancellation/progress streaming, and publishing pack generation remain open.
 
 ## Run locally
 
