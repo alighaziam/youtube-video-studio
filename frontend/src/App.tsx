@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type DiagramNode = { id: string; label: string; x: number; y: number };
 type DiagramEdge = { label: string };
@@ -346,7 +346,7 @@ export default function App() {
         <div className="stage">{selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="attached-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}<small>{selectedAsset.name}</small></div> : <div className="slide">
           <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
           <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
-          <div className="diagram editor-diagram" style={{"--diagram-accent":selectedDiagram.accentColor ?? "#7187ff"} as React.CSSProperties}>{selectedDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
+          <div className="diagram editor-diagram" style={{"--diagram-accent":selectedDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{selectedDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
           <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
         </div>}</div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
