@@ -86,7 +86,6 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
         if not scenes:
             raise RuntimeError("Add at least one scene before rendering.")
         width, height = (1080, 1920) if profile == "shorts-1080p" else (1920, 1080)
-        total_duration = sum(max(1, min(3600, int(scene.get("duration", 5)))) for scene in scenes)
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in title).strip("-")[:48] or "video"
@@ -100,6 +99,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 "SELECT id, relative_path FROM assets WHERE project_id = ?", (project_id,)
             ).fetchall()} if has_assets else {}
         for scene in scenes:
+            scene_duration = max(1, min(3600, int(scene.get("duration", 5))))
             voice_id = scene.get("voiceAssetId")
             if voice_id:
                 relative = asset_rows.get(voice_id)
@@ -108,8 +108,17 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 voice_path = (media_root / relative).resolve()
                 if media_root not in voice_path.parents or not voice_path.is_file():
                     raise RuntimeError(f"Voice-over file for scene '{scene.get('title', '')}' is missing.")
+                probe_audio = subprocess.run(
+                    [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(voice_path)],
+                    capture_output=True, text=True, check=False,
+                )
+                if probe_audio.returncode != 0:
+                    raise RuntimeError(f"Could not inspect voice-over for scene '{scene.get('title', '')}'.")
+                audio_duration = float(json.loads(probe_audio.stdout).get("format", {}).get("duration", 0))
+                scene_duration = max(scene_duration, int(audio_duration + 0.999))
                 voice_inputs.append((voice_path, elapsed * 1000))
-            elapsed += max(1, min(3600, int(scene.get("duration", 5))))
+            elapsed += scene_duration
+        total_duration = elapsed
         with tempfile.TemporaryDirectory(prefix="framelab-render-") as temp:
             temp_dir = Path(temp)
             (temp_dir / "captions.ass").write_text(_build_ass(scenes, width, height), encoding="utf-8")
