@@ -14,13 +14,13 @@ Updated: 2026-11-10
 | MP4 audio mix | Initial | FFmpeg mixes generated scene narration at scene offsets, extends scene timing when narration exceeds its planned duration, and validates the final MP4 |
 | Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
 | Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
-| MP4 rendering | Initial | FFmpeg scene composition for attached images/videos and deterministic static layouts for architecture/code/comparison scenes; timed title/caption overlays, narration mix, 16:9 and 9:16 profiles, ffprobe validation and download |
+| MP4 rendering | Initial | FFmpeg scene composition for attached images/videos; deterministic semantic diagrams for event-driven, API gateway, data flow, modular monolith, microservices and request-sequence scenes; code/comparison layouts, timed overlays, narration mix, 16:9 and 9:16 profiles, ffprobe validation and download |
 | Capability detection | Implemented | FFmpeg, ffprobe, subtitles filter and libx264 checks |
 | CI workflow | Configured | Backend pytest and frontend TypeScript/Vite build; recent GitHub Actions runs reported startup_failure without creating jobs, so latest CI result is not verified |
 
 ## Known limitations
 
-- Rendering composes one attached image/video as each scene's visual background and adds static template geometry for architecture, code and comparison scene types. It is not yet a multi-layer canvas compositor.
+- Rendering composes one attached image/video as each scene's visual background and adds deterministic semantic layouts selected from scene title, narration and kind. Supported architecture patterns include event-driven, API gateway, database flow, modular monolith, microservices and authentication/request sequence. This is keyword-based local inference, not an LLM or a full editable diagram engine; labels are English and need editorial review. It is not yet a multi-layer canvas compositor.
 - The preview reflects the selected scene title, narration, type and attached media, but it is not pixel-identical to the final FFmpeg render.
 - Scene image/video attachments are composed into the exported MP4 with contain-to-fill crop. Arbitrary uploaded audio assets are not yet mixed; only generated voice-over clips are mixed.
 - Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
@@ -32,7 +32,7 @@ Updated: 2026-11-10
 
 ## Next implementation order
 
-1. Add a multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom.
+1. Add a multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom; expose semantic diagram nodes and labels as editable scene properties.
 2. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
 3. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
 4. Complete caption editing, styling, overlay preview and verified Persian shaping.
@@ -41,3 +41,11 @@ Updated: 2026-11-10
 7. Add recovery/versioning, backup/export, packaging and end-to-end installation checks.
 
 A phase is not complete merely because files are committed. It needs passing automated checks and a reproducible end-to-end verification.
+
+
+## Semantic visual engine (2026-11-10)
+
+- Scene title, narration and kind are inspected locally using deterministic keyword rules.
+- The renderer selects labeled diagrams for event-driven messaging, API gateway routing, database access, modular monolith boundaries, microservices and authentication/request sequences.
+- Diagram nodes and edge labels are rendered as static ASS text over FFmpeg vector geometry in both landscape and portrait profiles. Code and comparison scenes retain dedicated templates.
+- No network request, paid API, generated stock art, zoom or pan is used. Semantic selection and layout need local runtime tests and visual review before being treated as production-verified.
