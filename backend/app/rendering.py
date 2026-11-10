@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request\nfrom fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["rendering"])
