@@ -13,6 +13,7 @@ dist/
 .vite/
 
 # Local application data
+.data/
 data/
 projects/
 renders/
