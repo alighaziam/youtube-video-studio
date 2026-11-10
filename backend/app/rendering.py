@@ -63,6 +63,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + min(3, duration))},Title,,0,0,0,,{title}")
         narration = str(scene.get("narration") or scene.get("body") or "").strip()
         if narration:
+            caption_duration = min(float(duration), max(0.5, float(scene.get("captionDuration", duration))))
             sentences = [part.strip() for part in re.split(r"(?<=[.!?؟])\s+", narration) if part.strip()]
             chunks: list[str] = []
             for sentence in sentences or [narration]:
@@ -73,8 +74,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             total_weight = sum(weights) or 1
             local_cursor = cursor
             for chunk, weight in zip(chunks, weights):
-                chunk_duration = duration * weight / total_weight
-                end = min(cursor + duration, local_cursor + chunk_duration)
+                chunk_duration = caption_duration * weight / total_weight
+                end = min(cursor + caption_duration, local_cursor + chunk_duration)
                 events.append(f"Dialogue: 1,{_ass_time(local_cursor)},{_ass_time(end)},Caption,,0,0,0,,{_ass_escape(chunk)}")
                 local_cursor = end
         cursor += duration
@@ -186,6 +187,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 if probe_audio.returncode != 0:
                     raise RuntimeError(f"Could not inspect voice-over for scene '{scene.get('title', '')}'.")
                 audio_duration = float(json.loads(probe_audio.stdout).get("format", {}).get("duration", 0))
+                scene["captionDuration"] = audio_duration
                 duration = max(duration, int(audio_duration + 0.999))
                 voice_inputs.append((voice_path, elapsed * 1000))
             scene["duration"] = duration
