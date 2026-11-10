@@ -10,6 +10,8 @@ Updated: 2026-11-10
 | Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |
 | Script-to-storyboard | Initial | Converts paragraphs/sentences to suggested scenes; editable title, type, duration and narration |
 | Project media library | Initial | Frontend upload/list/delete; image previews; scene-level media references and image/video preview; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
+| Local voice-over | Initial | Piper voice catalog, local per-scene WAV synthesis, scene audio references, audio preview and voice track; requires user-installed engine and licensed models |
+| MP4 audio mix | Initial | FFmpeg mixes generated scene narration at scene offsets, extends scene timing when narration exceeds its planned duration, and validates the final MP4 |
 | Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
 | Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
 | MP4 rendering | Initial | FFmpeg timed title cards, 16:9 and 9:16 profiles, ffprobe validation and download |
@@ -22,7 +24,7 @@ Updated: 2026-11-10
 - The preview remains a sample composition and is not WYSIWYG.
 - Media files can be attached to scenes and image/video assets preview in the stage. The renderer does not yet compose these attachments into the exported MP4; audio attachments are not mixed into output.
 - Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
-- Audio recording/import, waveform, trim, mix, noise reduction, loudness normalization and render audio mux are not implemented.
+- Browser microphone recording, external audio import, waveform editing, trimming, noise reduction and loudness normalization are not implemented. Generated Piper voice-overs are mixed into MP4; arbitrary audio assets are not yet mixed.
 - Subtitle editor, style controls, preview overlay and Persian visual QA are incomplete.
 - Render jobs are in-memory; process restart loses job status. Persistent queue, progress streaming, cancellation and segment retry are not implemented.
 - Undo/redo, crash recovery, version history, templates/brand kit, local Whisper/Piper adapters, and Windows/Linux packaging remain outstanding.
@@ -36,7 +38,7 @@ Updated: 2026-11-10
 4. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
 5. Complete caption editing, styling, overlay preview and verified Persian shaping.
 6. Persist render jobs and add progress, cancellation, retry and output validation.
-7. Add optional local speech-to-text and text-to-speech adapters with model/license guidance.
+7. Add optional local speech-to-text, improve voice selection/preview and add audio recording/import/editing with model/license guidance.
 8. Add recovery/versioning, backup/export, packaging and end-to-end installation checks.
 
 A phase is not complete merely because files are committed. It needs passing automated checks and a reproducible end-to-end verification.
