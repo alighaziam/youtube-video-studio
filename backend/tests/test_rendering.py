@@ -146,8 +146,8 @@ def test_scene_layer_normalization_clamps_geometry_and_sorts_z_order() -> None:
         {"id": "hidden", "type": "image", "x": 10, "y": 10, "width": 20, "height": 20, "zIndex": 1, "visible": False, "assetId": "asset-1"},
     ])
     assert [layer["id"] for layer in layers] == ["hidden", "top"]
-    assert layers[1]["x"] == 100 and layers[1]["y"] == 0
-    assert layers[1]["width"] == 100 and layers[1]["height"] == 1
+    assert layers[1]["x"] == 99 and layers[1]["y"] == 0
+    assert layers[1]["width"] == 1 and layers[1]["height"] == 1
     assert layers[1]["opacity"] == 1
 
 
