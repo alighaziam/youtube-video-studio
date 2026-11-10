@@ -186,3 +186,21 @@ def test_scene_layer_filter_composites_media_in_z_order() -> None:
     assert "overlay=x=960:y=216" in graph
     assert "colorchannelmixer=aa=0.5" in graph
     assert "zoompan" not in graph
+
+
+
+def test_diagram_layer_draws_its_frame_and_positions_each_node_label() -> None:
+    scene = {
+        "title": "Independent diagram",
+        "kind": "Concept",
+        "duration": 5,
+        "layers": [{
+            "id": "diagram-1", "type": "diagram", "content": "CLIENT → ORDER API → DATABASE",
+            "x": 10, "y": 20, "width": 80, "height": 30,
+            "zIndex": 4, "opacity": 1, "visible": True,
+        }],
+    }
+    filters = _scene_visual_filter(scene, 1920, 1080, 30)
+    ass = _build_ass([scene], 1920, 1080)
+    assert "drawbox=x=192:y=216:w=1536:h=324" in filters
+    assert "CLIENT" in ass and "ORDER API" in ass and "DATABASE" in ass
