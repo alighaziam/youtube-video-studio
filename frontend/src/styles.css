@@ -6,3 +6,5 @@
 .render-banner{margin-top:12px;padding:10px 12px;border:1px solid #315b54;background:#162d2b;color:#9de0c5;border-radius:7px;font-size:10px;line-height:1.7;overflow-wrap:anywhere}.actions button:disabled{opacity:.55;cursor:wait}
 
 .script-input{display:block;width:100%;min-height:78px;resize:vertical;margin:12px 0 7px;padding:10px;background:#111a2b;border:1px solid #29354d;border-radius:7px;color:#dce5f5;font:10px/1.8 Vazirmatn,sans-serif;outline:none}.script-input:focus{border-color:#756df5}.script-button{margin-top:0!important;font-size:10px!important}.script-button:disabled{opacity:.5;cursor:not-allowed}.publishing-pack{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;margin-top:12px;padding:12px;background:#101a2b;border:1px solid #2c3a53;border-radius:8px;color:#b8c8df;font:9px/1.7 monospace;direction:ltr;text-align:left}
+
+.download-link{display:inline-block;margin-inline-start:12px;color:#b4aaff;text-decoration:underline;font-weight:700}
