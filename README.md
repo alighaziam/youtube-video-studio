@@ -41,6 +41,10 @@ The product is designed for creators who want professional motion-slide videos w
 - [Implementation roadmap](docs/roadmap.md)
 - [Persian subtitle rendering spike](docs/technical-spike-persian-subtitles.md)
 
+## Local voice-over
+
+The editor can generate per-scene narration locally with Piper, list installed voices, attach generated WAV files to scenes, and mix them into the rendered MP4. This optional feature requires a Piper installation and voice models; it does not download models automatically. Follow [the local voice-over setup guide](docs/local-voiceover.md) and review each model's license before monetized use.
+
 ## Technology direction
 
 - Frontend: React, TypeScript, Vite, Zustand, Tailwind
