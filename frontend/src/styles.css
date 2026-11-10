@@ -37,3 +37,28 @@
 .diagram-coordinates input{width:100%;margin-top:4px}
 .diagram-node-editor .edit-field{margin:5px 0}
 .diagram-add{width:100%;margin:8px 0 14px}
+
+.canvas-stage{position:relative;width:min(100%,760px);aspect-ratio:16/9;overflow:hidden;background:#10182b;border-radius:6px;isolation:isolate}
+.canvas-stage>.slide,.canvas-base-media{position:absolute;inset:0;width:100%;height:100%;max-width:none;aspect-ratio:auto}
+.canvas-stage>.slide{padding:5% 6%}
+.canvas-base-media img,.canvas-base-media video{width:100%;height:100%;object-fit:cover}
+.canvas-layer{position:absolute;overflow:hidden;display:flex;align-items:center;justify-content:center;border:1px solid #8194c866;border-radius:5px;background:#192944cc;color:#f1f4ff;padding:1%;pointer-events:none}
+.canvas-layer img,.canvas-layer video{width:100%;height:100%;object-fit:contain}
+.canvas-layer.layer-text{font-size:clamp(9px,1.2vw,20px);font-weight:700;text-align:center;overflow-wrap:anywhere}
+.canvas-layer.layer-code{align-items:flex-start;justify-content:flex-start;background:#0a1020ee;border-color:#61749b;padding:2%}
+.canvas-layer.layer-code pre{width:100%;height:100%;margin:0;white-space:pre-wrap;overflow:hidden;color:#a9e6d4;font:clamp(6px,.8vw,12px)/1.5 monospace}
+.layer-diagram{font-weight:800;text-align:center}
+.layer-add-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:8px 0}
+.layer-add-grid button,.canvas-layer-heading button{border:1px solid #34415c;border-radius:6px;background:#18243a;color:#c4cce0;padding:6px 4px;font-size:9px;cursor:pointer}
+.canvas-layer-editor{margin:8px 0;padding:9px;border:1px solid #2b3953;border-radius:8px;background:#111a2b}
+.canvas-layer-heading{display:flex;align-items:center;gap:4px;margin-bottom:7px}
+.canvas-layer-heading b{font-size:9px;flex:1;color:#d7e0f1}
+.canvas-layer-heading span{font:8px monospace;color:#8795ae}
+.canvas-layer-heading button{padding:3px 6px}
+.layer-content{min-height:55px;resize:vertical;margin:4px 0}
+.layer-transform-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.layer-transform-grid label{font-size:8px}
+.layer-transform-grid input{margin-top:4px}
+.layer-opacity{display:flex!important;align-items:center;gap:7px}
+.layer-opacity input{flex:1;min-width:50px}
+@media(max-width:800px){.canvas-stage{width:100%}}
