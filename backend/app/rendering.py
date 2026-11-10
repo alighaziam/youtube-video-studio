@@ -185,7 +185,7 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
             positions = [(int(width * node["x"] / 100), int(height * node["y"] / 100)) for node in nodes]
             accent = spec["accentColor"].lstrip("#")
         else:
-            positions = [(int(width * (0.09 + index * (0.82 / max(1, count - 1))), int(height * .49)) for index in range(count)]
+            positions = [(int(width * (0.09 + index * (0.82 / max(1, count - 1)))), int(height * .49)) for index in range(count)]
             accent = "91a4ff"
         boxes = []
         for center_x, center_y in positions:
