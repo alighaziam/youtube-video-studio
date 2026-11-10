@@ -320,6 +320,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
         media_root = Path(assets_dir or (Path(db_path).parent / "assets")).resolve()
         voice_inputs: list[tuple[Path, int]] = []
         scene_media: list[Path | None] = []
+        scene_layer_media: list[list[tuple[dict[str, Any], Path]]] = []
         elapsed = 0
         for scene in scenes:
             duration = max(1, min(3600, int(scene.get("duration", 5))))
@@ -358,6 +359,22 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 voice_inputs.append((voice_path, elapsed * 1000))
             scene["duration"] = duration
             scene_media.append(media_path)
+            resolved_layers: list[tuple[dict[str, Any], Path]] = []
+            for layer in _normalize_scene_layers(scene.get("layers")):
+                if not layer["visible"] or layer["type"] not in {"image", "video"}:
+                    continue
+                record = asset_rows.get(layer["assetId"])
+                if not record:
+                    raise RuntimeError("A visible media layer references a missing project asset.")
+                relative, mime_type = record
+                expected = "image/" if layer["type"] == "image" else "video/"
+                if not mime_type.startswith(expected):
+                    raise RuntimeError("A media layer references an asset with the wrong media type.")
+                layer_path = (media_root / relative).resolve()
+                if media_root not in layer_path.parents or not layer_path.is_file():
+                    raise RuntimeError("A visible media layer file is missing.")
+                resolved_layers.append((layer, layer_path))
+            scene_layer_media.append(resolved_layers)
             elapsed += duration
         total_duration = elapsed
         with tempfile.TemporaryDirectory(prefix="framelab-render-") as temp:
@@ -372,13 +389,22 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                     input_args = ["-loop", "1", "-framerate", str(fps), "-i", str(media_path)]
                 else:
                     input_args = ["-stream_loop", "-1", "-i", str(media_path)]
-                scene_command = [
-                    ffmpeg, "-y", "-hide_banner", "-loglevel", "error", *input_args,
-                    "-t", str(duration),
-                    "-vf", _scene_visual_filter(scenes[index], width, height, fps),
+                layer_inputs = scene_layer_media[index]
+                for layer, layer_path in layer_inputs:
+                    if layer["type"] == "image":
+                        input_args.extend(["-loop", "1", "-framerate", str(fps), "-i", str(layer_path)])
+                    else:
+                        input_args.extend(["-stream_loop", "-1", "-i", str(layer_path)])
+                scene_command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", *input_args, "-t", str(duration)]
+                if layer_inputs:
+                    filter_graph, video_map = _scene_layer_filter(scenes[index], width, height, fps, layer_inputs)
+                    scene_command.extend(["-filter_complex", filter_graph, "-map", video_map])
+                else:
+                    scene_command.extend(["-vf", _scene_visual_filter(scenes[index], width, height, fps)])
+                scene_command.extend([
                     "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
                     "-pix_fmt", "yuv420p", "-r", str(fps), str(segment),
-                ]
+                ])
                 rendered = subprocess.run(scene_command, capture_output=True, text=True, check=False)
                 if rendered.returncode != 0 or not segment.is_file():
                     raise RuntimeError(rendered.stderr.strip() or f"Could not render scene {index + 1}.")
