@@ -57,7 +57,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     for scene in scenes:
         duration = max(1, min(3600, int(scene.get("duration", 5))))
         title = _ass_escape(str(scene.get("title", "Untitled scene")))
-        body = _ass_escape(str(scene.get("body", "")))
+        body = _ass_escape(str(scene.get("body", scene.get("narration", ""))))
         content = title if not body else title + r"\N" + body
         events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + duration)},Default,,0,0,0,,{content}")
         cursor += duration
