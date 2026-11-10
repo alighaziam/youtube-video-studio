@@ -135,3 +135,31 @@ def test_custom_diagram_nodes_edges_positions_and_color_are_used() -> None:
     filters = _scene_visual_filter(scene, 1920, 1080, 30)
     assert "0x22aa88" in filters
     assert "drawbox=x=163" in filters
+
+
+
+def test_scene_layer_normalization_clamps_geometry_and_sorts_z_order() -> None:
+    from app.rendering import _normalize_scene_layers
+
+    layers = _normalize_scene_layers([
+        {"id": "top", "type": "text", "x": 120, "y": -4, "width": 150, "height": 0, "zIndex": 9, "opacity": 2, "visible": True, "content": "Hello"},
+        {"id": "hidden", "type": "image", "x": 10, "y": 10, "width": 20, "height": 20, "zIndex": 1, "visible": False, "assetId": "asset-1"},
+    ])
+    assert [layer["id"] for layer in layers] == ["hidden", "top"]
+    assert layers[1]["x"] == 100 and layers[1]["y"] == 0
+    assert layers[1]["width"] == 100 and layers[1]["height"] == 1
+    assert layers[1]["opacity"] == 1
+
+
+def test_ass_renders_visible_text_and_code_layers_with_layer_positions() -> None:
+    result = _build_ass([{
+        "title": "Layer test", "duration": 5,
+        "layers": [
+            {"id": "txt", "type": "text", "content": "Independent headline", "x": 25, "y": 30, "width": 50, "height": 20, "zIndex": 1, "opacity": 1, "visible": True},
+            {"id": "code", "type": "code", "content": "class OrderService {}", "x": 10, "y": 55, "width": 80, "height": 25, "zIndex": 2, "opacity": .8, "visible": True},
+            {"id": "off", "type": "text", "content": "Hidden text", "x": 0, "y": 0, "width": 20, "height": 20, "visible": False},
+        ],
+    }], 1920, 1080)
+    assert "Independent headline" in result
+    assert "class OrderService" in result
+    assert "Hidden text" not in result
