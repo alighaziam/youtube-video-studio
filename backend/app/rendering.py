@@ -39,6 +39,42 @@ def _ass_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", r"\N")
 
 
+def _infer_visual_spec(scene: dict[str, Any]) -> dict[str, Any]:
+    """Choose a deterministic, offline diagram from the scene's technical meaning."""
+    kind = str(scene.get("kind", "")).lower()
+    text = " ".join(str(scene.get(key, "")) for key in ("title", "narration", "body", "kind")).lower()
+
+    if any(term in kind for term in ("code", "کد")):
+        return {"type": "code", "nodes": ["SOURCE CODE"], "edges": []}
+    if any(term in kind for term in ("comparison", "مقایسه")) or any(
+        term in text for term in ("trade-off", "tradeoff", "versus", " vs ", "در مقابل", "مزیت و عیب")
+    ):
+        return {"type": "comparison", "nodes": ["OPTION A", "OPTION B"], "edges": ["VS"]}
+
+    patterns = [
+        ("event_driven", ("event-driven", "event driven", "kafka", "rabbitmq", "message broker", "event bus", "رویدادمحور", "رویداد محور", "کارگزار پیام", "بروکر", "پیام رویداد")),
+        ("api_gateway", ("api gateway", "gateway", "گیت‌وی", "گیت وی", "درگاه api")),
+        ("data_flow", ("database", "postgres", "postgresql", "mysql", "persistence", "data access", "دیتابیس", "پایگاه داده", "ذخیره‌سازی", "ذخیره سازی")),
+        ("modular_monolith", ("modular monolith", "ماژولار مونولیت", "مونولیت ماژولار")),
+        ("microservices", ("microservices", "microservice", "میکروسرویس", "میکرو سرویس")),
+        ("sequence", ("sequence diagram", "request flow", "authentication", "oauth", "login flow", "توالی درخواست", "جریان درخواست", "احراز هویت", "ورود کاربر")),
+    ]
+    selected = next((name for name, terms in patterns if any(term in text for term in terms)), None)
+    specs = {
+        "event_driven": {"type": "event_driven", "nodes": ["PRODUCER", "BROKER", "CONSUMER"], "edges": ["PUBLISH", "DELIVER"]},
+        "api_gateway": {"type": "api_gateway", "nodes": ["CLIENT", "API GATEWAY", "SERVICES", "DATA"], "edges": ["HTTP", "ROUTE", "QUERY"]},
+        "data_flow": {"type": "data_flow", "nodes": ["CLIENT", "API", "DATABASE"], "edges": ["REQUEST", "READ / WRITE"]},
+        "modular_monolith": {"type": "modular_monolith", "nodes": ["API", "ORDERS", "CATALOG", "SHARED DB"], "edges": ["CALL", "CONTRACT", "PERSIST"]},
+        "microservices": {"type": "microservices", "nodes": ["API GATEWAY", "ORDER SVC", "CATALOG SVC", "DATABASES"], "edges": ["ROUTE", "HTTP / EVENT", "PERSIST"]},
+        "sequence": {"type": "sequence", "nodes": ["CLIENT", "IDENTITY", "TOKEN", "API"], "edges": ["LOGIN", "ISSUE", "AUTHORIZE"]},
+    }
+    if selected:
+        return specs[selected]
+    if any(term in kind or term in text for term in ("architecture", "diagram", "معماری", "دیاگرام", "service", "سرویس", "module", "ماژول")):
+        return {"type": "request_flow", "nodes": ["CLIENT", "APPLICATION", "DATABASE"], "edges": ["REQUEST", "QUERY"]}
+    return {"type": "concept", "nodes": [], "edges": []}
+
+
 def _build_ass(scenes: list[dict[str, Any]], width: int, height: int) -> str:
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -52,6 +88,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Title,DejaVu Sans,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,1,0,1,3,1,8,110,110,90,1
 Style: Caption,DejaVu Sans,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
 Style: Diagram,DejaVu Sans,{int(height * 0.024)},&H00E8F0FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,1,5,20,20,20,1
+Style: Edge,DejaVu Sans,{int(height * 0.016)},&H00B9C9FF,&H000000FF,&H00101827,&H90101827,1,0,1,1,0,5,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -62,24 +99,28 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         duration = max(1, min(3600, int(scene.get("duration", 5))))
         title = _ass_escape(str(scene.get("title", "Untitled scene")))
         events.append(f"Dialogue: 0,{_ass_time(cursor)},{_ass_time(cursor + min(3, duration))},Title,,0,0,0,,{title}")
-        kind = str(scene.get("kind", "")).lower()
-        diagram_labels: list[tuple[str, int, int]] = []
-        if "architecture" in kind or "diagram" in kind or "معماری" in kind or "دیاگرام" in kind:
-            diagram_labels = [
-                ("CLIENT", int(width * .185), int(height * .495)),
-                ("API", int(width * .5), int(height * .495)),
-                ("DATA", int(width * .815), int(height * .495)),
-            ]
-        elif "code" in kind or "کد" in kind:
-            diagram_labels = [("SOURCE CODE", int(width * .5), int(height * .265))]
-        elif "comparison" in kind or "مقایسه" in kind:
-            diagram_labels = [
-                ("OPTION A", int(width * .28), int(height * .5)),
-                ("OPTION B", int(width * .72), int(height * .5)),
-            ]
-        for label, x, y in diagram_labels:
-            override = chr(92) + "an5" + chr(92) + f"pos({x},{y})"
-            events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{_ass_escape(label)}")
+        spec = _infer_visual_spec(scene)
+        nodes = spec["nodes"]
+        if nodes and spec["type"] not in {"code", "comparison"}:
+            count = len(nodes)
+            xs = [int(width * (0.09 + index * (0.82 / max(1, count - 1)))) for index in range(count)]
+            node_y = int(height * 0.49)
+            edge_y = int(height * 0.405)
+            for index, label in enumerate(nodes):
+                override = chr(92) + "an5" + chr(92) + f"pos({xs[index]},{node_y})"
+                events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{_ass_escape(label)}")
+            for index, label in enumerate(spec["edges"]):
+                if index + 1 < len(xs):
+                    midpoint = (xs[index] + xs[index + 1]) // 2
+                    override = chr(92) + "an5" + chr(92) + f"pos({midpoint},{edge_y})"
+                    events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Edge,,0,0,0,,{{{override}}}{_ass_escape(label)}")
+        elif spec["type"] == "code":
+            override = chr(92) + "an5" + chr(92) + f"pos({int(width * .5)},{int(height * .265)})"
+            events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}SOURCE CODE")
+        elif spec["type"] == "comparison":
+            for label, x in (("OPTION A", int(width * .28)), ("OPTION B", int(width * .72))):
+                override = chr(92) + "an5" + chr(92) + f"pos({x},{int(height * .5)})"
+                events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{label}")
         narration = str(scene.get("narration") or scene.get("body") or "").strip()
         if narration:
             caption_duration = min(float(duration), max(0.5, float(scene.get("captionDuration", duration))))
@@ -106,19 +147,23 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
         f"scale={width}:{height}:force_original_aspect_ratio=increase",
         f"crop={width}:{height}", "setsar=1", f"fps={fps}", "format=yuv420p",
     ]
-    kind = str(scene.get("kind", "Concept")).lower()
-    if "architecture" in kind or "diagram" in kind or "معماری" in kind or "دیاگرام" in kind:
-        node_w, node_h = int(width * .19), int(height * .13)
+    spec = _infer_visual_spec(scene)
+    visual_type = spec["type"]
+    if visual_type not in {"code", "comparison", "concept"}:
+        nodes = spec["nodes"]
+        count = len(nodes)
+        node_w, node_h = int(width * min(.19, .68 / count)), int(height * .14)
         y = int(height * .43)
-        xs = [int(width * .09), int(width * .405), int(width * .72)]
+        centers = [int(width * (.09 + index * (.82 / max(1, count - 1)))) for index in range(count)]
+        xs = [center - node_w // 2 for center in centers]
         for x in xs:
             filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x6478f5@0.28:t=fill")
             filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x91a4ff@0.9:t=3")
-        filters.extend([
-            f"drawbox=x={xs[0]+node_w}:y={y+node_h//2-3}:w={xs[1]-xs[0]-node_w}:h=6:color=0x91a4ff@0.85:t=fill",
-            f"drawbox=x={xs[1]+node_w}:y={y+node_h//2-3}:w={xs[2]-xs[1]-node_w}:h=6:color=0x91a4ff@0.85:t=fill",
-        ])
-    elif "code" in kind or "کد" in kind:
+        for index in range(len(xs) - 1):
+            start_x = xs[index] + node_w
+            connector_w = max(1, xs[index + 1] - start_x)
+            filters.append(f"drawbox=x={start_x}:y={y + node_h // 2 - 3}:w={connector_w}:h=6:color=0x91a4ff@0.85:t=fill")
+    elif visual_type == "code":
         x, y, w, h = int(width * .12), int(height * .2), int(width * .76), int(height * .6)
         filters.append(f"drawbox=x={x}:y={y}:w={w}:h={h}:color=0x0b1220@0.92:t=fill")
         filters.append(f"drawbox=x={x}:y={y}:w={w}:h={int(height*.055)}:color=0x27334a@0.95:t=fill")
@@ -127,7 +172,7 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
             line_w = int(w * fraction)
             line_color = ("78a9ff", "6ed6c1", "9aa8c4")[index % 3]
             filters.append(f"drawbox=x={x+int(w*.06)}:y={line_y}:w={line_w}:h={max(5,int(height*.009))}:color=0x{line_color}@0.72:t=fill")
-    elif "comparison" in kind or "مقایسه" in kind:
+    elif visual_type == "comparison":
         x1, x2, y, w, h = int(width*.1), int(width*.54), int(height*.27), int(width*.36), int(height*.46)
         filters.append(f"drawbox=x={x1}:y={y}:w={w}:h={h}:color=0x315b86@0.25:t=fill")
         filters.append(f"drawbox=x={x1}:y={y}:w={w}:h={h}:color=0x5ca7ed@0.85:t=3")
