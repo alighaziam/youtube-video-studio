@@ -42,7 +42,7 @@ def test_ffmpeg_render_mixes_scene_voiceover(tmp_path: Path) -> None:
     import subprocess
     generated = subprocess.run([
         shutil.which("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5", str(voice_path),
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=1.5", str(voice_path),
     ], capture_output=True, text=True, check=False)
     assert generated.returncode == 0, generated.stderr
     with sqlite3.connect(db_path) as db:
@@ -63,6 +63,7 @@ def test_ffmpeg_render_mixes_scene_voiceover(tmp_path: Path) -> None:
     _render(job_id, str(db_path), str(tmp_path / "renders"), project_id, "youtube-1080p", 24, str(assets_dir))
     job = _jobs[job_id]
     assert job["status"] == "completed", job.get("error")
+    assert job["duration_seconds"] >= 2
     probe = subprocess.run([
         shutil.which("ffprobe"), "-v", "error", "-show_entries", "stream=codec_type",
         "-of", "json", job["output_path"],
