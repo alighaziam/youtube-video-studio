@@ -104,41 +104,58 @@ def generate_voiceovers(project_id: str, payload: VoiceoverRequest, request: Req
         raise HTTPException(status_code=400, detail="Invalid project asset directory.")
     project_dir.mkdir(parents=True, exist_ok=True)
     generated: list[dict[str, Any]] = []
-    for scene in selected:
-        asset_id = str(uuid.uuid4())
-        filename = f"voice-{asset_id}.wav"
-        output = project_dir / filename
-        try:
-            result = subprocess.run(
-                [binary, "--model", str(model), "--output_file", str(output)],
-                input=str(scene["narration"]).strip(),
-                capture_output=True, text=True, check=False, timeout=300,
-            )
-        except subprocess.TimeoutExpired:
-            output.unlink(missing_ok=True)
-            raise HTTPException(status_code=504, detail="Local voice generation timed out after five minutes.")
-        except OSError as exc:
-            output.unlink(missing_ok=True)
-            raise HTTPException(status_code=503, detail=f"Could not start Piper: {exc}") from exc
-        if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
-            output.unlink(missing_ok=True)
-            raise HTTPException(status_code=502, detail=(result.stderr.strip() or "Piper voice generation failed.")[-1200:])
-        relative = output.relative_to(assets_dir).as_posix()
-        size = output.stat().st_size
-        with sqlite3.connect(db_path) as db:
-            db.execute("""CREATE TABLE IF NOT EXISTS assets (
-                id TEXT PRIMARY KEY, project_id TEXT NOT NULL, original_name TEXT NOT NULL,
-                mime_type TEXT NOT NULL, relative_path TEXT NOT NULL, size_bytes INTEGER NOT NULL,
-                created_at TEXT NOT NULL
-            )""")
-            db.execute(
-                "INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (asset_id, project_id, filename, "audio/wav", relative, size, datetime.now(timezone.utc).isoformat()),
-            )
-        generated.append({
-            "scene_id": scene["id"], "asset": {
-                "id": asset_id, "project_id": project_id, "name": filename,
-                "mime_type": "audio/wav", "relative_path": relative, "size_bytes": size,
-            },
-        })
+    created_files: list[Path] = []
+    created_asset_ids: list[str] = []
+    try:
+        for scene in selected:
+            asset_id = str(uuid.uuid4())
+            filename = f"voice-{asset_id}.wav"
+            output = project_dir / filename
+            try:
+                result = subprocess.run(
+                    [binary, "--model", str(model), "--output_file", str(output)],
+                    input=str(scene["narration"]).strip(),
+                    capture_output=True, text=True, check=False, timeout=300,
+                )
+            except subprocess.TimeoutExpired:
+                output.unlink(missing_ok=True)
+                raise HTTPException(status_code=504, detail="Local voice generation timed out after five minutes.")
+            except OSError as exc:
+                output.unlink(missing_ok=True)
+                raise HTTPException(status_code=503, detail=f"Could not start Piper: {exc}") from exc
+            if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
+                output.unlink(missing_ok=True)
+                raise HTTPException(status_code=502, detail=(result.stderr.strip() or "Piper voice generation failed.")[-1200:])
+
+            created_files.append(output)
+            relative = output.relative_to(assets_dir).as_posix()
+            size = output.stat().st_size
+            with sqlite3.connect(db_path) as db:
+                db.execute("""CREATE TABLE IF NOT EXISTS assets (
+                    id TEXT PRIMARY KEY, project_id TEXT NOT NULL, original_name TEXT NOT NULL,
+                    mime_type TEXT NOT NULL, relative_path TEXT NOT NULL, size_bytes INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
+                )""")
+                db.execute(
+                    "INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (asset_id, project_id, filename, "audio/wav", relative, size, datetime.now(timezone.utc).isoformat()),
+                )
+            created_asset_ids.append(asset_id)
+            generated.append({
+                "scene_id": scene["id"], "asset": {
+                    "id": asset_id, "project_id": project_id, "name": filename,
+                    "mime_type": "audio/wav", "relative_path": relative, "size_bytes": size,
+                },
+            })
+    except Exception:
+        # A multi-scene request is atomic from the editor's perspective: never leave
+        # orphaned WAV files/assets when a later scene fails to synthesize.
+        for path in created_files:
+            path.unlink(missing_ok=True)
+        if created_asset_ids:
+            with sqlite3.connect(db_path) as db:
+                db.executemany("DELETE FROM assets WHERE id = ? AND project_id = ?",
+                               [(asset_id, project_id) for asset_id in created_asset_ids])
+        raise
+
     return {"voice_id": payload.voice_id, "generated": generated, "count": len(generated)}
