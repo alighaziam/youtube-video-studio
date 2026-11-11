@@ -1,3 +1,20 @@
+# Current implementation checkpoint — 11 November 2026
+
+The repository has a working vertical slice in source: project/storyboard persistence, local media library, optional Piper voice generation, FFmpeg scene rendering, captions, 16:9/9:16 profiles, output probing, and publishing-pack export. The one-action script-to-MP4 path is available when Piper and a licensed voice model are installed locally.
+
+Recent hardening:
+- The frontend explicitly persists the generated storyboard before requesting Piper, avoiding a race with debounced autosave.
+- Multi-scene Piper generation now rolls back WAV files and database asset records if any later scene fails; a regression test covers this failure path.
+
+Not yet verified in this environment:
+- Clean local install and actual Piper model execution on the user's machine.
+- End-to-end MP4 generation and manual Persian subtitle inspection.
+- GitHub Actions result for the latest commits. Empty/unavailable status data must not be treated as a passing build.
+
+Next work should continue on testable repository improvements while local-only checks are blocked. Do not mark a roadmap phase complete until its exit gate is demonstrated.
+
+---
+
 # Implementation Roadmap
 
 Each phase has an exit gate. Do not start the next phase until current tests and a reproducible demo pass.
