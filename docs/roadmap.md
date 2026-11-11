@@ -5,6 +5,7 @@ The repository has a working vertical slice in source: project/storyboard persis
 Recent hardening:
 - The frontend explicitly persists the generated storyboard before requesting Piper, avoiding a race with debounced autosave.
 - Multi-scene Piper generation now rolls back WAV files and database asset records if any later scene fails; a regression test covers this failure path.
+- FFmpeg subtitle filter argument no longer includes an empty trailing option separator, preventing a malformed filter expression during final muxing.
 
 Not yet verified in this environment:
 - Clean local install and actual Piper model execution on the user's machine.
