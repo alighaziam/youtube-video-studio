@@ -450,7 +450,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
             command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(base_video)]
             for voice_path, _delay in voice_inputs:
                 command.extend(["-i", str(voice_path)])
-            command.extend(["-vf", f"subtitles={captions_path.name}:"])
+            command.extend(["-vf", f"subtitles={captions_path.name}"])
             if voice_inputs:
                 filters, labels = [], []
                 for index, (_voice_path, delay_ms) in enumerate(voice_inputs, start=1):
