@@ -81,16 +81,16 @@ def test_generate_voiceovers_rolls_back_when_a_later_scene_fails(tmp_path: Path,
     fake_piper = tmp_path / "piper"
     counter = tmp_path / "piper-count.txt"
     fake_piper.write_text(
-        "#!/usr/bin/env python3\\n"
-        "import pathlib, sys\\n"
-        f"counter = pathlib.Path({str(counter)!r})\\n"
-        "count = int(counter.read_text() if counter.exists() else '0') + 1\\n"
-        "counter.write_text(str(count))\\n"
-        "if count == 2:\\n"
-        "    print('simulated second-scene failure', file=sys.stderr)\\n"
-        "    raise SystemExit(1)\\n"
-        "output = pathlib.Path(sys.argv[sys.argv.index('--output_file') + 1])\\n"
-        "output.write_bytes(b'RIFF' + b'fake-wav-data')\\n",
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        f"counter = pathlib.Path({str(counter)!r})\n"
+        "count = int(counter.read_text() if counter.exists() else '0') + 1\n"
+        "counter.write_text(str(count))\n"
+        "if count == 2:\n"
+        "    print('simulated second-scene failure', file=sys.stderr)\n"
+        "    raise SystemExit(1)\n"
+        "output = pathlib.Path(sys.argv[sys.argv.index('--output_file') + 1])\n"
+        "output.write_bytes(b'RIFF' + b'fake-wav-data')\n",
         encoding="utf-8",
     )
     fake_piper.chmod(0o755)
