@@ -163,6 +163,17 @@ export default function App() {
         setScenes(workingScenes);
         if (workingScenes.length) setActive(workingScenes[0].id);
       }
+      // Persist the exact storyboard before requesting TTS. React autosave is debounced,
+      // so without this explicit write the backend may still read the previous scene list.
+      const storyboardSave = await fetch(`${API}/projects/${project.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: { ...project.document, scenes: workingScenes } }),
+      });
+      if (!storyboardSave.ok) throw new Error("Could not save the storyboard before voice generation.");
+      setProject(current => current ? {
+        ...current, document: { ...current.document, scenes: workingScenes },
+      } : current);
+
       const eligible = workingScenes.filter(scene => scene.narration?.trim());
       if (!eligible.length) throw new Error(fa ? "ابتدا متن سناریو یا متن گویندگی صحنه‌ها را وارد کن." : "Enter a script or scene narration first.");
       const mapping = new Map<string, string>();
