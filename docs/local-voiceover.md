@@ -40,6 +40,11 @@ Restart the local API after installing the engine and models. The editor's **Loc
 
 Each generated WAV is stored in the current project's local media library and linked to its scene. The MP4 renderer mixes those WAV files into the final video at the start time of each scene. If no scene has generated narration audio, the render remains silent.
 
+
+### Batch failure behavior
+
+A multi-scene voice-over request is atomic from the editor's perspective. If Piper fails, times out, or cannot start for a later scene, WAV files and asset records created earlier in that same request are rolled back. The user can correct the problem and retry the batch without manually cleaning orphaned generated voice assets. Existing assets from earlier successful requests are not touched.
+
 ## Add visuals to scenes
 
 Upload PNG/JPEG/WebP images or MP4/WebM clips to the Media Library. Select a scene, then choose its image/video from the **Scene media** selector. The renderer places that asset behind the scene title and timed narration captions. Images stay completely still; video clips play normally and loop if the scene is longer than the source clip. The renderer crops to fill the selected 16:9 or 9:16 frame, so keep important subjects near the center. Scenes without an attached asset use a dark designed background; Architecture/Diagram, Code and Comparison scene types receive different static geometric templates. No automatic zoom or pan is applied.
