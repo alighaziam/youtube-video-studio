@@ -1,2 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "unit: pure behavior that does not render video",
+    "integration: API flows against a temporary database",
+    "smoke: a real FFmpeg render of a short lesson",
+]

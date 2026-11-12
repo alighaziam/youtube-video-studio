@@ -8,6 +8,8 @@ import pytest
 
 from app.rendering import _jobs, _render
 
+pytestmark = pytest.mark.smoke
+
 
 @pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg is not installed")
 def test_ffmpeg_render_creates_valid_mp4(tmp_path: Path) -> None:

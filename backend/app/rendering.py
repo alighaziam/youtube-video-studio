@@ -19,11 +19,47 @@ from pydantic import BaseModel, Field
 router = APIRouter(tags=["rendering"])
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
+_cancelled_jobs: set[str] = set()
+_running_processes: dict[str, subprocess.Popen[str]] = {}
+_processes_lock = threading.Lock()
+
+
+class RenderCancelled(RuntimeError):
+    """The user stopped this render before FFmpeg finished."""
 
 
 class RenderRequest(BaseModel):
-    profile: Literal["youtube-1080p", "shorts-1080p"] = "youtube-1080p"
+    profile: Literal["youtube-1080p", "shorts-1080p"] = Field(
+        default="youtube-1080p",
+        description="youtube-1080p is 1920×1080. shorts-1080p is 1080×1920.",
+    )
     fps: int = Field(default=30, ge=24, le=60)
+
+
+class RenderAccepted(BaseModel):
+    job_id: str
+    status: str = "queued"
+
+
+class RenderJobRecord(BaseModel):
+    id: str
+    project_id: str
+    status: str = Field(description="queued, running, completed, failed, or cancelled.")
+    profile: str | None = None
+    fps: int | None = None
+    output_path: str | None = None
+    error: str | None = None
+    duration_seconds: float | None = None
+    width: int | None = None
+    height: int | None = None
+    created_at: str
+    updated_at: str
+    progress: int = Field(default=0, ge=0, le=100)
+
+
+class RenderCancellation(BaseModel):
+    id: str
+    status: str
 
 
 def _normalize_scene_layers(raw_layers: Any) -> list[dict[str, Any]]:
@@ -153,6 +189,13 @@ def _split_diagram_labels(content: str) -> list[str]:
     return [part.strip() for part in re.split(r"\s*(?:→|->|\|)\s*", content) if part.strip()][:8]
 
 
+def _bundled_font_files() -> list[Path]:
+    font_dir = Path(__file__).resolve().parents[2] / "frontend" / "public" / "fonts"
+    if not font_dir.is_dir():
+        return []
+    return sorted(path for path in font_dir.glob("*.ttf") if path.is_file())
+
+
 def _build_ass(scenes: list[dict[str, Any]], width: int, height: int) -> str:
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -163,11 +206,11 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Title,DejaVu Sans,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,1,0,1,3,1,8,110,110,90,1
-Style: Caption,DejaVu Sans,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
-Style: Diagram,DejaVu Sans,{int(height * 0.024)},&H00E8F0FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,1,5,20,20,20,1
-Style: Edge,DejaVu Sans,{int(height * 0.016)},&H00B9C9FF,&H000000FF,&H00101827,&H90101827,1,0,1,1,0,5,10,10,10,1
-Style: LayerText,DejaVu Sans,{int(height * 0.034)},&H00F4F6FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,0,5,12,12,12,1
+Style: Title,Vazirmatn,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,1,0,1,3,1,8,110,110,90,1
+Style: Caption,Vazirmatn,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
+Style: Diagram,Vazirmatn,{int(height * 0.024)},&H00E8F0FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,1,5,20,20,20,1
+Style: Edge,Vazirmatn,{int(height * 0.016)},&H00B9C9FF,&H000000FF,&H00101827,&H90101827,1,0,1,1,0,5,10,10,10,1
+Style: LayerText,Vazirmatn,{int(height * 0.034)},&H00F4F6FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,0,5,12,12,12,1
 Style: LayerCode,DejaVu Sans Mono,{int(height * 0.019)},&H00A9E6D4,&H000000FF,&H000A1020,&H900A1020,1,0,1,2,0,7,12,12,12,1
 
 [Events]
@@ -358,6 +401,9 @@ def _ensure_job_table(db: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL
         )"""
     )
+    columns = {row[1] for row in db.execute("PRAGMA table_info(render_jobs)")}
+    if "progress" not in columns:
+        db.execute("ALTER TABLE render_jobs ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
 
 
 def _job_row(job: dict[str, Any]) -> tuple[Any, ...]:
@@ -366,7 +412,7 @@ def _job_row(job: dict[str, Any]) -> tuple[Any, ...]:
         job["id"], str(job.get("project_id") or ""), str(job.get("status") or "queued"),
         job.get("profile"), job.get("fps"), job.get("output_path"), job.get("error"),
         job.get("duration_seconds"), job.get("width"), job.get("height"),
-        str(job.get("created_at") or now), now,
+        str(job.get("created_at") or now), now, int(job.get("progress") or 0),
     )
 
 
@@ -374,12 +420,15 @@ def persist_job(db_path: Path | str, job: dict[str, Any]) -> None:
     with sqlite3.connect(db_path) as db:
         _ensure_job_table(db)
         db.execute(
-            """INSERT INTO render_jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO render_jobs (
+                 id, project_id, status, profile, fps, output_path, error,
+                 duration_seconds, width, height, created_at, updated_at, progress
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  project_id=excluded.project_id, status=excluded.status, profile=excluded.profile,
                  fps=excluded.fps, output_path=excluded.output_path, error=excluded.error,
                  duration_seconds=excluded.duration_seconds, width=excluded.width, height=excluded.height,
-                 updated_at=excluded.updated_at""",
+                 progress=excluded.progress, updated_at=excluded.updated_at""",
             _job_row(job),
         )
 
@@ -425,6 +474,46 @@ def recover_interrupted_jobs(db_path: Path | str, *, force: bool = False) -> Non
         )
 
 
+def _motion_suffix(scene: dict[str, Any], duration: int) -> str:
+    """Opt-in fade only. Static scenes stay completely still."""
+    if str(scene.get("motion") or "static") != "fade":
+        return ""
+    seconds = max(1, int(duration))
+    fade = min(0.45, max(0.12, seconds / 5))
+    start_out = max(0.0, round(seconds - fade, 3))
+    return f",fade=t=in:st=0:d={fade:.3f},fade=t=out:st={start_out:.3f}:d={fade:.3f}"
+
+
+def _is_cancelled(job_id: str) -> bool:
+    with _jobs_lock:
+        return job_id in _cancelled_jobs
+
+
+def _run_ffmpeg(job_id: str, command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    """Run FFmpeg and stop it promptly when this job is cancelled."""
+    if _is_cancelled(job_id):
+        raise RenderCancelled("Render was cancelled.")
+    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    with _processes_lock:
+        _running_processes[job_id] = process
+    try:
+        while True:
+            try:
+                stdout, stderr = process.communicate(timeout=0.25)
+                break
+            except subprocess.TimeoutExpired:
+                if _is_cancelled(job_id):
+                    process.kill()
+                    process.communicate()
+                    raise RenderCancelled("Render was cancelled.")
+        if _is_cancelled(job_id):
+            raise RenderCancelled("Render was cancelled.")
+        return subprocess.CompletedProcess(command, process.returncode or 0, stdout, stderr)
+    finally:
+        with _processes_lock:
+            _running_processes.pop(job_id, None)
+
+
 def _set_job(job_id: str, **values: Any) -> None:
     with _jobs_lock:
         if job_id not in _jobs:
@@ -439,7 +528,10 @@ def _set_job(job_id: str, **values: Any) -> None:
 
 def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
     try:
-        _set_job(job_id, status="running")
+        if _is_cancelled(job_id):
+            _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
+            return
+        _set_job(job_id, status="running", progress=4)
         ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
         if not ffmpeg or not ffprobe:
             raise RuntimeError("FFmpeg and ffprobe must be installed and available on PATH.")
@@ -524,7 +616,11 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
             temp_dir = Path(temp)
             segment_paths: list[Path] = []
             for index, media_path in enumerate(scene_media):
+                if _is_cancelled(job_id):
+                    raise RenderCancelled("Render was cancelled.")
+                _set_job(job_id, progress=8 + int(70 * index / max(1, len(scene_media))))
                 duration = int(scenes[index]["duration"])
+                motion = _motion_suffix(scenes[index], duration)
                 segment = temp_dir / f"scene-{index:04d}.mp4"
                 if media_path is None:
                     input_args = ["-f", "lavfi", "-i", f"color=c=0x111827:s={width}x{height}:r={fps}:d={duration}"]
@@ -541,34 +637,48 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 scene_command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", *input_args, "-t", str(duration)]
                 if layer_inputs:
                     filter_graph, video_map = _scene_layer_filter(scenes[index], width, height, fps, layer_inputs)
+                    if motion and video_map.startswith("["):
+                        filter_graph += f";{video_map}format=yuv420p{motion}[vmotion]"
+                        video_map = "[vmotion]"
+                    elif motion:
+                        filter_graph += motion
                     scene_command.extend(["-filter_complex", filter_graph, "-map", video_map])
                 else:
-                    scene_command.extend(["-vf", _scene_visual_filter(scenes[index], width, height, fps)])
+                    scene_command.extend(["-vf", _scene_visual_filter(scenes[index], width, height, fps) + motion])
                 scene_command.extend([
                     "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
                     "-pix_fmt", "yuv420p", "-r", str(fps), str(segment),
                 ])
-                rendered = subprocess.run(scene_command, capture_output=True, text=True, check=False)
+                rendered = _run_ffmpeg(job_id, scene_command)
                 if rendered.returncode != 0 or not segment.is_file():
                     raise RuntimeError(rendered.stderr.strip() or f"Could not render scene {index + 1}.")
                 segment_paths.append(segment)
+            _set_job(job_id, progress=82)
             concat_file = temp_dir / "scenes.txt"
             concat_file.write_text("".join(f"file '{path.as_posix()}'\n" for path in segment_paths), encoding="utf-8")
             base_video = temp_dir / "base-video.mp4"
-            joined = subprocess.run(
-                [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
-                 "-i", str(concat_file), "-c", "copy", str(base_video)],
-                capture_output=True, text=True, check=False,
-            )
+            joined = _run_ffmpeg(job_id, [
+                ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
+                "-i", str(concat_file), "-c", "copy", str(base_video),
+            ])
             if joined.returncode != 0 or not base_video.is_file():
                 raise RuntimeError(joined.stderr.strip() or "Could not join rendered scenes.")
+            _set_job(job_id, progress=90)
             captions_path = temp_dir / "captions.ass"
             captions_path.write_text(_build_ass(scenes, width, height), encoding="utf-8")
+            subtitle_filter = f"subtitles={captions_path.name}"
+            font_files = _bundled_font_files()
+            if font_files:
+                fonts_path = temp_dir / "fonts"
+                fonts_path.mkdir()
+                for font in font_files:
+                    shutil.copy2(font, fonts_path / font.name)
+                subtitle_filter += ":fontsdir=fonts"
             temporary_output = temp_dir / "output.mp4"
             command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(base_video)]
             for voice_path, _delay in voice_inputs:
                 command.extend(["-i", str(voice_path)])
-            command.extend(["-vf", f"subtitles={captions_path.name}"])
+            command.extend(["-vf", subtitle_filter])
             if voice_inputs:
                 filters, labels = [], []
                 for index, (_voice_path, delay_ms) in enumerate(voice_inputs, start=1):
@@ -583,7 +693,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 "-t", str(total_duration), "-c:v", "libx264", "-preset", "medium", "-crf", "20",
                 "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary_output),
             ])
-            process = subprocess.run(command, cwd=temp_dir, capture_output=True, text=True, check=False)
+            process = _run_ffmpeg(job_id, command, cwd=temp_dir)
             if process.returncode != 0 or not temporary_output.exists():
                 raise RuntimeError(process.stderr.strip() or "FFmpeg render failed.")
             probe = subprocess.run(
@@ -603,12 +713,23 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
             shutil.move(temporary_output, final_path)
             duration = float(metadata.get("format", {}).get("duration", total_duration))
         _set_job(job_id, status="completed", output_path=str(final_path), duration_seconds=duration,
-                 width=width, height=height, error=None)
+                 width=width, height=height, error=None, progress=100)
+    except RenderCancelled:
+        _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
     except Exception as exc:
-        _set_job(job_id, status="failed", error=str(exc))
+        if _is_cancelled(job_id):
+            _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
+        else:
+            _set_job(job_id, status="failed", error=str(exc))
 
-@router.post("/api/v1/projects/{project_id}/renders", status_code=202)
-def create_render(project_id: str, payload: RenderRequest, background: BackgroundTasks, request: Request) -> dict[str, Any]:
+@router.post(
+    "/api/v1/projects/{project_id}/renders",
+    status_code=202,
+    response_model=RenderAccepted,
+    summary="Queue an MP4 render",
+    responses={404: {"description": "Project was not found"}},
+)
+def create_render(project_id: str, payload: RenderRequest, background: BackgroundTasks, request: Request) -> RenderAccepted:
     db_path = Path(getattr(request.app.state, "db_path", Path(".data/studio.sqlite3")))
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="Project database not found")
@@ -620,20 +741,21 @@ def create_render(project_id: str, payload: RenderRequest, background: Backgroun
     now = datetime.now(timezone.utc).isoformat()
     job = {"id": job_id, "project_id": project_id, "status": "queued", "profile": payload.profile,
            "fps": payload.fps, "created_at": now, "updated_at": now, "output_path": None,
-           "error": None, "duration_seconds": None, "width": None, "height": None}
+           "error": None, "duration_seconds": None, "width": None, "height": None, "progress": 0}
     with _jobs_lock:
         _jobs[job_id] = job
         _job_databases[job_id] = str(db_path)
     persist_job(db_path, job)
     output_dir = str(Path(getattr(request.app.state, "render_dir", Path(".data/renders"))))
     background.add_task(_render, job_id, str(db_path), output_dir, project_id, payload.profile, payload.fps, str(Path(getattr(request.app.state, "assets_dir", Path(".data/assets")))))
-    return {"job_id": job_id, "status": "queued"}
+    return RenderAccepted(job_id=job_id, status="queued")
 
 
-@router.get("/api/v1/projects/{project_id}/renders")
-def list_project_renders(project_id: str, request: Request) -> list[dict[str, Any]]:
+@router.get("/api/v1/projects/{project_id}/renders", response_model=list[RenderJobRecord], summary="List recent renders")
+def list_project_renders(project_id: str, request: Request) -> list[RenderJobRecord]:
+    """The latest 20 jobs for this project, including jobs recovered after a restart."""
     db_path = Path(getattr(request.app.state, "db_path", Path(".data/studio.sqlite3")))
-    return list_jobs(db_path, project_id)
+    return [RenderJobRecord.model_validate(job) for job in list_jobs(db_path, project_id)]
 
 
 def _resolve_job(job_id: str, request: Request) -> dict[str, Any]:
@@ -648,12 +770,60 @@ def _resolve_job(job_id: str, request: Request) -> dict[str, Any]:
     return stored
 
 
-@router.get("/api/v1/jobs/{job_id}")
-def get_render_job(job_id: str, request: Request) -> dict[str, Any]:
-    return _resolve_job(job_id, request)
+@router.get("/api/v1/jobs/{job_id}", response_model=RenderJobRecord, summary="Read render progress", responses={404: {"description": "Render job not found"}})
+def get_render_job(job_id: str, request: Request) -> RenderJobRecord:
+    return RenderJobRecord.model_validate(_resolve_job(job_id, request))
 
 
-@router.get("/api/v1/jobs/{job_id}/download")
+@router.post(
+    "/api/v1/jobs/{job_id}/cancel",
+    response_model=RenderCancellation,
+    summary="Cancel a queued or running render",
+    responses={409: {"description": "The job already finished"}},
+)
+def cancel_render_job(job_id: str, request: Request) -> RenderCancellation:
+    job = _resolve_job(job_id, request)
+    if job.get("status") not in {"queued", "running"}:
+        raise HTTPException(status_code=409, detail="Only a queued or running render can be cancelled.")
+    db_path = str(Path(getattr(request.app.state, "db_path", Path(".data/studio.sqlite3"))))
+    with _jobs_lock:
+        _cancelled_jobs.add(job_id)
+        _jobs.setdefault(job_id, dict(job))
+        _job_databases[job_id] = db_path
+    with _processes_lock:
+        process = _running_processes.get(job_id)
+    if process is not None and process.poll() is None:
+        process.kill()
+    if job.get("status") == "queued":
+        _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
+    return RenderCancellation(id=job_id, status="cancelled")
+
+
+@router.post(
+    "/api/v1/jobs/{job_id}/retry",
+    status_code=202,
+    response_model=RenderAccepted,
+    summary="Retry a failed or cancelled render",
+    responses={409: {"description": "Only a failed or cancelled job can be retried"}},
+)
+def retry_render_job(job_id: str, background: BackgroundTasks, request: Request) -> RenderAccepted:
+    job = _resolve_job(job_id, request)
+    if job.get("status") not in {"failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Only a failed or cancelled render can be retried.")
+    profile = job.get("profile") if job.get("profile") in {"youtube-1080p", "shorts-1080p"} else "youtube-1080p"
+    fps = int(job.get("fps") or 30)
+    return create_render(str(job.get("project_id") or ""), RenderRequest(profile=profile, fps=fps), background, request)
+
+
+@router.get(
+    "/api/v1/jobs/{job_id}/download",
+    summary="Download the finished MP4",
+    responses={
+        200: {"content": {"video/mp4": {}}, "description": "The validated H.264 file."},
+        404: {"description": "Job or file was not found"},
+        409: {"description": "Render is not complete"},
+    },
+)
 def download_render(job_id: str, request: Request):
     job = _resolve_job(job_id, request)
     if job.get("status") != "completed" or not job.get("output_path"):

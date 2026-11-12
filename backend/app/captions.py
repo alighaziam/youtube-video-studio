@@ -33,6 +33,11 @@ class CaptionExport(BaseModel):
     format: Literal["srt", "vtt"]
 
 
+class CaptionExportResult(BaseModel):
+    format: Literal["srt", "vtt"]
+    content: str = Field(description="متن آمادهٔ ذخیره به صورت SRT یا VTT.")
+
+
 def _to_ms(value: str) -> int:
     match = TIME_RE.match(value.strip())
     if not match:
@@ -91,17 +96,18 @@ def export_caption_text(cues: list[CaptionCue], fmt: str) -> str:
     return "\n".join(chunks).rstrip() + "\n"
 
 
-@router.post("/import", response_model=CaptionDocument)
+@router.post("/import", response_model=CaptionDocument, summary="Parse SRT or VTT", responses={422: {"description": "Timing or text is invalid"}})
 def import_captions(payload: CaptionImport) -> CaptionDocument:
+    """Accepts comma or dot milliseconds. Empty cues are rejected."""
     try:
         return parse_caption_text(payload.content, payload.format)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/export")
-def export_captions(payload: CaptionExport) -> dict[str, str]:
+@router.post("/export", response_model=CaptionExportResult, summary="Write SRT or VTT", responses={422: {"description": "A cue ends before it starts"}})
+def export_captions(payload: CaptionExport) -> CaptionExportResult:
     try:
-        return {"format": payload.format, "content": export_caption_text(payload.cues, payload.format)}
+        return CaptionExportResult(format=payload.format, content=export_caption_text(payload.cues, payload.format))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

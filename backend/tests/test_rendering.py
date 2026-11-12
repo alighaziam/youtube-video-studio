@@ -1,11 +1,16 @@
 import re
 
-from app.rendering import _ass_escape, _ass_time, _build_ass, _scene_visual_filter
+from app.rendering import _ass_escape, _ass_time, _build_ass, _bundled_font_files, _motion_suffix, _scene_visual_filter
 
 
 def test_ass_timestamp_and_text_escaping() -> None:
     assert _ass_time(65.25) == "0:01:05.25"
     assert _ass_escape("{override} \nsecond") == "(override) \\Nsecond"
+
+
+def test_persian_font_files_ship_with_the_studio() -> None:
+    names = {path.name for path in _bundled_font_files()}
+    assert {"Vazirmatn-Regular.ttf", "Vazirmatn-Bold.ttf"} <= names
 
 
 def test_ass_document_contains_timed_scene_events() -> None:
@@ -17,6 +22,8 @@ def test_ass_document_contains_timed_scene_events() -> None:
     assert "0:00:00.00,0:00:03.00,Title" in result
     assert "0:00:04.00,0:00:10.00" in result
     assert "سلام دنیا" in result
+    assert "Style: Title,Vazirmatn," in result
+    assert "Style: Caption,Vazirmatn," in result
 
 
 
@@ -50,6 +57,14 @@ def test_caption_timing_uses_generated_voice_duration() -> None:
     caption_lines = [line for line in result.splitlines() if ",Caption,," in line]
     assert caption_lines
     assert "0:00:04.25" in caption_lines[-1]
+
+
+def test_fade_motion_is_opt_in_and_static_is_still() -> None:
+    assert _motion_suffix({}, 8) == ""
+    assert _motion_suffix({"motion": "static"}, 8) == ""
+    fade = _motion_suffix({"motion": "fade"}, 8)
+    assert fade.startswith(",fade=t=in:st=0:d=")
+    assert "fade=t=out" in fade
 
 
 def test_caption_lines_keep_one_karaoke_beat_per_word() -> None:
