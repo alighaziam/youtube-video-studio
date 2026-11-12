@@ -1,44 +1,42 @@
 # Current implementation status
 
-Updated: 2026-11-10
+Updated: 2026-11-12
 
 ## Implemented
 
 | Capability | Status | Notes |
 |---|---|---|
 | React/TypeScript editor shell | Initial | RTL/LTR, scene list, inspector, responsive dark UI |
-| Project persistence | Implemented | SQLite CRUD API; scene edits autosave through REST |
+| Project persistence | Implemented | SQLite CRUD, duplicate with media copy, JSON export/import of the document, autosave |
 | Script-to-storyboard | Initial | Converts paragraphs/sentences to suggested scenes; editable title, type, duration and narration |
 | Project media library | Initial | Frontend upload/list/delete; image previews; scene-level media references and image/video preview; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
 | Local voice-over | Initial | Piper voice catalog, one-action script → storyboard → per-scene WAV synthesis → MP4 render, scene audio references, audio preview and voice track; requires user-installed engine and licensed models |
-| MP4 audio mix | Initial | FFmpeg mixes generated scene narration at scene offsets, extends scene timing when narration exceeds its planned duration, and validates the final MP4 |
-| Subtitle conversion | Implemented | SRT/VTT parsing and export endpoints; full editor/preview not complete |
-| Publishing pack | Initial | Draft titles, description, chapters, tags and thumbnail brief |
+| MP4 audio mix | Implemented | FFmpeg mixes Piper or uploaded scene audio at scene offsets, extends timing to the probed length, and validates the MP4 |
+| Subtitle conversion | Implemented | SRT/VTT endpoints, editable narration page, SRT download, word preview |
+| Publishing pack | Implemented | Draft titles, description, chapters, tags, thumbnail brief, and Markdown download |
 | MP4 rendering | Initial | FFmpeg scene composition for attached images/videos; deterministic semantic diagrams; independent scene layers with position, size, z-order, visibility and opacity; timed overlays, narration mix, 16:9 and 9:16 profiles, ffprobe validation and download |
 | Capability detection | Implemented | FFmpeg, ffprobe, subtitles filter and libx264 checks |
-| CI workflow | Configured | Backend pytest and frontend TypeScript/Vite build; recent GitHub Actions runs reported startup_failure without creating jobs, so latest CI result is not verified |
+| CI workflow | Configured | Backend unit, integration, and FFmpeg smoke pytest, plus frontend Vitest and the production build |
 
 ## Known limitations
 
-- Rendering composes one attached image/video as each scene's visual background and adds deterministic semantic layouts selected from scene title, narration and kind. Supported architecture patterns include event-driven, API gateway, database flow, modular monolith, microservices and authentication/request sequence. This is keyword-based local inference, not an LLM or a full editable diagram engine; labels are English and need editorial review. It is not yet a multi-layer canvas compositor.
-- The preview reflects the selected scene title, narration, type and attached media, but it is not pixel-identical to the final FFmpeg render.
-- Scene image/video attachments are composed into the exported MP4 with contain-to-fill crop. Arbitrary uploaded audio assets are not yet mixed; only generated voice-over clips are mixed.
-- Timeline is a visual placeholder: no clip trimming, splitting, dragging, snapping, or multi-track editing.
-- Browser microphone recording, external audio import, waveform editing, trimming, noise reduction and loudness normalization are not implemented. Generated Piper voice-overs are mixed into MP4; arbitrary audio assets are not yet mixed.
-- Sentence-level captions are split into readable chunks and timed proportionally by word count; this is approximate timing, not phoneme/word alignment. Subtitle editor, style controls, preview overlay and Persian visual QA are incomplete.
-- Render jobs are in-memory; process restart loses job status. Persistent queue, progress streaming, cancellation and segment retry are not implemented.
-- Undo/redo, crash recovery, version history, templates/brand kit, local Whisper adapter, and Windows/Linux packaging remain outstanding.
-- Persian glyph shaping still requires visual inspection on a supported machine; no pixel-parity claim is made.
+- Diagram choice is keyword-based and local. It is not a language model. Labels still need a human pass.
+- The preview follows the saved scene, but it is not a pixel copy of the FFmpeg frame. Media layers and text overlays are not interleaved in the same z-order in the encoder.
+- Uploaded wav/mp3/m4a/aac/ogg and Piper WAVs can be attached per scene and are mixed into the MP4. The studio does not record the microphone, draw a waveform, trim inside a file, or normalize loudness.
+- The timeline reorders scenes, resizes duration, and shows voice and word lanes. It does not split a clip or snap to a grid.
+- Captions are readable word groups timed from the scene length, or from the probed voice length at render time. There is no phoneme alignment and no separate caption style preset.
+- Render jobs are stored in SQLite with progress, cancel, and retry. A restart marks an unfinished job as interrupted. There is no segment checkpoint for a half-rendered scene.
+- Project duplicate copies the storyboard and media files. JSON export/import copies the document only, not the media bytes. There is no brand kit, version history, Whisper adapter, or installer package.
+- Persian glyph shaping still needs a look at the rendered frame on a machine with the font. No pixel-parity claim is made.
+- Publishing stays a draft. The studio does not upload to YouTube or LinkedIn.
 
 ## Next implementation order
 
-1. Expand the editable diagram layer into a true multi-layer scene canvas for separate image/video, code, SVG and diagram layers with explicit transforms and no automatic movement/zoom.
-2. Replace the placeholder timeline with editable multi-track clips and scene timing controls.
-3. Add audio recording/import, waveform editing, mixdown, normalization and audio mux.
-4. Complete caption editing, styling, overlay preview and verified Persian shaping.
-5. Persist render jobs and add progress, cancellation, retry and output validation.
-6. Add optional local speech-to-text, improve voice selection/preview and add audio recording/import/editing with model/license guidance.
-7. Add recovery/versioning, backup/export, packaging and end-to-end installation checks.
+1. Optional browser recording, waveform trim, and loudness check for imported audio.
+2. Caption style presets and a checked Persian render sample.
+3. Version history beyond undo, plus a backup that includes media files.
+4. Local speech-to-text only when the user installs a model.
+5. Setup packaging for Windows and Linux.
 
 A phase is not complete merely because files are committed. It needs passing automated checks and a reproducible end-to-end verification.
 

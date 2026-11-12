@@ -7,16 +7,22 @@ import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter(prefix="/api/v1", tags=["creator"])
 
 
 class ScriptRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=160)
-    script: str = Field(min_length=1, max_length=100_000)
-    language: Literal["fa", "en"] = "fa"
-    words_per_minute: int = Field(default=130, ge=60, le=240)
+    model_config = ConfigDict(json_schema_extra={"examples": [{
+        "title": "درس معماری",
+        "script": "معماری تصمیم می‌گیرد کدام تغییر ارزان بماند.\n\nمرز ماژول‌ها باید در کد دیده شود.",
+        "language": "fa",
+        "words_per_minute": 130,
+    }]})
+    title: str = Field(min_length=1, max_length=160, description="عنوان درس.")
+    script: str = Field(min_length=1, max_length=100_000, description="هر پاراگراف یک صحنه می‌شود. اگر پاراگراف نباشد، جمله‌ها گروه‌بندی می‌شوند.")
+    language: Literal["fa", "en"] = Field(default="fa", description="زبان عنوان نوع صحنه و بستهٔ انتشار.")
+    words_per_minute: int = Field(default=130, ge=60, le=240, description="برای تخمین مدت هر صحنه.")
 
 
 class SuggestedScene(BaseModel):
@@ -30,8 +36,17 @@ class SuggestedScene(BaseModel):
 class StoryboardResponse(BaseModel):
     title: str
     language: str
-    estimated_duration: int
+    estimated_duration: int = Field(description="مجموع مدت صحنه‌ها به ثانیه.")
     scenes: list[SuggestedScene]
+
+
+class PublishingPack(BaseModel):
+    title_options: list[str]
+    description: str
+    chapters: list[str] = Field(description="فصل‌ها با زمان شروع MM:SS.")
+    tags: list[str]
+    thumbnail_brief: str
+    disclaimer: str
 
 
 def _split_script(script: str) -> list[str]:
@@ -50,7 +65,7 @@ def _split_script(script: str) -> list[str]:
             current, count = [], 0
     if current:
         groups.append(" ".join(current))
-    return groups
+    return [group.strip() for group in groups if group.strip()]
 
 
 _KIND_LABELS = {
@@ -82,8 +97,9 @@ def _scene_kind(text: str, index: int, total: int, language: str) -> str:
     return _KIND_LABELS.get(language, _KIND_LABELS["en"])[key]
 
 
-@router.post("/storyboard/from-script", response_model=StoryboardResponse)
+@router.post("/storyboard/from-script", response_model=StoryboardResponse, summary="Turn a script into scenes")
 def storyboard_from_script(payload: ScriptRequest) -> StoryboardResponse:
+    """Local and deterministic. Nothing is sent to a language model."""
     paragraphs = _split_script(payload.script)
     if not paragraphs:
         raise HTTPException(status_code=422, detail="Script contains no usable paragraphs")
@@ -102,8 +118,14 @@ def storyboard_from_script(payload: ScriptRequest) -> StoryboardResponse:
     )
 
 
-@router.post("/projects/{project_id}/publishing-pack")
-def publishing_pack(project_id: str, request: Request) -> dict[str, Any]:
+@router.post(
+    "/projects/{project_id}/publishing-pack",
+    response_model=PublishingPack,
+    summary="Draft a publishing pack",
+    responses={404: {"description": "Project not found"}},
+)
+def publishing_pack(project_id: str, request: Request) -> PublishingPack:
+    """Titles, description, chapters, and tags for the saved project. This does not upload anywhere."""
     db_path = getattr(request.app.state, "db_path", ".data/studio.sqlite3")
     with sqlite3.connect(db_path) as db:
         row = db.execute("SELECT title, document_json FROM projects WHERE id = ?", (project_id,)).fetchone()
@@ -143,11 +165,7 @@ def publishing_pack(project_id: str, request: Request) -> dict[str, Any]:
         title_options = [title, f"{title} | Software Architecture Explained"]
         thumbnail_brief = f"Create a clean, high-contrast 16:9 thumbnail for: {title}. Use a short headline and one clear architecture visual."
         disclaimer = "Draft metadata only. Review claims, keywords, and chapter timings before publishing."
-    return {
-        "title_options": title_options,
-        "description": description,
-        "chapters": chapters,
-        "tags": tags,
-        "thumbnail_brief": thumbnail_brief,
-        "disclaimer": disclaimer,
-    }
+    return PublishingPack(
+        title_options=title_options, description=description, chapters=chapters,
+        tags=tags, thumbnail_brief=thumbnail_brief, disclaimer=disclaimer,
+    )

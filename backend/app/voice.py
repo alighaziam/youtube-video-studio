@@ -18,9 +18,46 @@ MAX_SCENES = 30
 MAX_TEXT = 8000
 
 
+class VoiceModel(BaseModel):
+    id: str = Field(description="نام فایل .onnx داخل پوشهٔ صداها.")
+    name: str
+    language: str = ""
+    quality: str = ""
+    installed: bool = True
+
+
+class VoiceCatalog(BaseModel):
+    engine: str = "Piper"
+    available: bool = Field(description="موتور Piper روی PATH یا در PIPER_BIN پیدا شده است.")
+    binary: str | None = None
+    voices: list[VoiceModel]
+    voices_directory: str
+    install_hint: str
+
+
+class GeneratedVoice(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    mime_type: str
+    relative_path: str
+    size_bytes: int
+
+
+class GeneratedVoiceover(BaseModel):
+    scene_id: str
+    asset: GeneratedVoice
+
+
+class VoiceoverResult(BaseModel):
+    voice_id: str
+    generated: list[GeneratedVoiceover]
+    count: int
+
+
 class VoiceoverRequest(BaseModel):
-    voice_id: str = Field(min_length=1, max_length=180)
-    scene_ids: list[str] | None = None
+    voice_id: str = Field(min_length=1, max_length=180, description="نام فایل مدل، مثلاً fa_IR-voice.onnx.")
+    scene_ids: list[str] | None = Field(default=None, description="اگر خالی باشد، همهٔ صحنه‌های دارای متن انتخاب می‌شوند. حداکثر ۳۰ صحنه.")
 
 
 def _voice_dir(request: Request) -> Path:
@@ -57,22 +94,31 @@ def _voice_catalog(directory: Path) -> list[dict[str, Any]]:
     return voices
 
 
-@router.get("/system/voices")
-def list_local_voices(request: Request) -> dict[str, Any]:
+@router.get("/system/voices", response_model=VoiceCatalog, summary="List installed Piper voices")
+def list_local_voices(request: Request) -> VoiceCatalog:
     binary = _piper_binary()
     voices = _voice_catalog(_voice_dir(request))
-    return {
-        "engine": "Piper",
-        "available": bool(binary),
-        "binary": Path(binary).name if binary else None,
-        "voices": voices,
-        "voices_directory": str(_voice_dir(request)),
-        "install_hint": "Install Piper and place licensed .onnx voice models plus matching .onnx.json metadata files in the voices directory.",
-    }
+    return VoiceCatalog(
+        available=bool(binary),
+        binary=Path(binary).name if binary else None,
+        voices=[VoiceModel.model_validate(voice) for voice in voices],
+        voices_directory=str(_voice_dir(request)),
+        install_hint="Install Piper and place licensed .onnx voice models plus matching .onnx.json metadata files in the voices directory.",
+    )
 
 
-@router.post("/projects/{project_id}/voiceovers", status_code=201)
-def generate_voiceovers(project_id: str, payload: VoiceoverRequest, request: Request) -> dict[str, Any]:
+@router.post(
+    "/projects/{project_id}/voiceovers",
+    status_code=201,
+    response_model=VoiceoverResult,
+    summary="Synthesize scene narration",
+    responses={
+        404: {"description": "Project or voice model was not found"},
+        422: {"description": "No scenes, or a selected scene has no narration"},
+        503: {"description": "Piper is not installed"},
+    },
+)
+def generate_voiceovers(project_id: str, payload: VoiceoverRequest, request: Request) -> VoiceoverResult:
     binary = _piper_binary()
     if not binary:
         raise HTTPException(status_code=503, detail="Piper is not installed or is not available on PATH.")
@@ -158,4 +204,4 @@ def generate_voiceovers(project_id: str, payload: VoiceoverRequest, request: Req
                                [(asset_id, project_id) for asset_id in created_asset_ids])
         raise
 
-    return {"voice_id": payload.voice_id, "generated": generated, "count": len(generated)}
+    return VoiceoverResult(voice_id=payload.voice_id, generated=[GeneratedVoiceover.model_validate(item) for item in generated], count=len(generated))

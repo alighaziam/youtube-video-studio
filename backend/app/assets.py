@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/assets", tags=["assets"])
 ALLOWED_TYPES = {
@@ -16,6 +17,16 @@ ALLOWED_TYPES = {
     "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/ogg": ".ogg",
 }
 MAX_BYTES = 250 * 1024 * 1024
+
+
+class AssetRecord(BaseModel):
+    id: str
+    name: str = Field(description="Original file name.")
+    mime_type: str
+    relative_path: str
+    size_bytes: int
+    project_id: str | None = None
+    created_at: str | None = None
 
 
 def _asset_db(request: Request) -> Path:
@@ -32,8 +43,14 @@ def _ensure_table(db: sqlite3.Connection) -> None:
     )""")
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def upload_asset(project_id: str, request: Request, file: UploadFile = File(...)) -> dict:
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AssetRecord,
+    summary="Upload image, video, or audio",
+    responses={415: {"description": "MIME type is not in the allow list"}, 413: {"description": "File is larger than 250 MB"}},
+)
+async def upload_asset(project_id: str, request: Request, file: UploadFile = File(..., description="png, jpeg, webp, mp4, webm, mp3, wav, m4a, aac, or ogg.")) -> AssetRecord:
     mime = (file.content_type or "").lower()
     if mime not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="Unsupported media type")
@@ -78,12 +95,12 @@ async def upload_asset(project_id: str, request: Request, file: UploadFile = Fil
             (asset_id, project_id, Path(file.filename or "upload").name[:255], mime,
              relative, size, datetime.now(timezone.utc).isoformat()),
         )
-    return {"id": asset_id, "project_id": project_id, "name": Path(file.filename or "upload").name,
-            "mime_type": mime, "relative_path": relative, "size_bytes": size}
+    return AssetRecord(id=asset_id, project_id=project_id, name=Path(file.filename or "upload").name,
+                        mime_type=mime, relative_path=relative, size_bytes=size)
 
 
-@router.get("")
-def list_assets(project_id: str, request: Request) -> list[dict]:
+@router.get("", response_model=list[AssetRecord], summary="List project media")
+def list_assets(project_id: str, request: Request) -> list[AssetRecord]:
     db_path = _asset_db(request)
     with sqlite3.connect(db_path) as db:
         _ensure_table(db)
@@ -91,11 +108,10 @@ def list_assets(project_id: str, request: Request) -> list[dict]:
             "SELECT id, original_name, mime_type, relative_path, size_bytes, created_at FROM assets WHERE project_id = ? ORDER BY created_at DESC",
             (project_id,),
         ).fetchall()
-    return [{"id": r[0], "name": r[1], "mime_type": r[2], "relative_path": r[3],
-             "size_bytes": r[4], "created_at": r[5]} for r in rows]
+    return [AssetRecord(id=r[0], name=r[1], mime_type=r[2], relative_path=r[3], size_bytes=r[4], created_at=r[5]) for r in rows]
 
 
-@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete one media file", responses={404: {"description": "Asset not found"}})
 def delete_asset(project_id: str, asset_id: str, request: Request) -> None:
     db_path = _asset_db(request)
     base_dir = Path(getattr(request.app.state, "assets_dir", Path(".data/assets"))).resolve()
@@ -115,7 +131,11 @@ def delete_asset(project_id: str, asset_id: str, request: Request) -> None:
 
 
 
-@router.get("/{asset_id}/file")
+@router.get(
+    "/{asset_id}/file",
+    summary="Stream the media file",
+    responses={200: {"content": {"application/octet-stream": {}}, "description": "The stored image, video, or audio."}, 404: {"description": "Asset not found"}},
+)
 def get_asset_file(project_id: str, asset_id: str, request: Request) -> FileResponse:
     db_path = _asset_db(request)
     with sqlite3.connect(db_path) as db:

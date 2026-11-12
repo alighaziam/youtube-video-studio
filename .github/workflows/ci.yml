@@ -34,10 +34,18 @@ jobs:
           sudo apt-get install -y ffmpeg fonts-dejavu-core
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements.txt
-      - name: Run backend tests
+      - name: Unit and existing backend tests
         env:
           PYTHONPATH: backend
-        run: python -m pytest backend/tests -q -ra
+        run: python -m pytest backend/tests -q -ra -m "not integration and not smoke"
+      - name: Integration tests
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest backend/tests -q -ra -m integration
+      - name: FFmpeg smoke tests
+        env:
+          PYTHONPATH: backend
+        run: python -m pytest backend/tests -q -ra -m smoke
 
   frontend:
     name: Frontend production build (Node 20)
@@ -55,5 +63,7 @@ jobs:
           node-version: "20"
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
+      - name: Frontend unit tests
+        run: npm test
       - name: Build frontend
         run: npm run build

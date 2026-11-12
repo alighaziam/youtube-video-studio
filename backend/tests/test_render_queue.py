@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.rendering import _jobs, list_jobs, persist_job, recover_interrupted_jobs
+from app.rendering import _job_databases, _jobs, list_jobs, persist_job, recover_interrupted_jobs
 
 client = TestClient(app)
 
@@ -43,3 +43,50 @@ def test_interrupted_render_jobs_are_marked_failed(tmp_path) -> None:
     stored = list_jobs(db_path, "project-a")[0]
     assert stored["status"] == "failed"
     assert "restarted" in stored["error"]
+
+
+def test_queued_render_can_be_cancelled(tmp_path) -> None:
+    app.state.db_path = tmp_path / "cancel.sqlite3"
+    project = client.post("/api/v1/projects", json={
+        "title": "Cancel",
+        "document": {"schemaVersion": 1, "scenes": [{"id": "scene-a", "title": "Intro", "duration": 5}]},
+    }).json()
+    job = {
+        "id": "job-queued", "project_id": project["id"], "status": "queued",
+        "profile": "youtube-1080p", "fps": 30, "output_path": None, "error": None,
+        "duration_seconds": None, "width": None, "height": None, "progress": 0,
+        "created_at": "2026-11-12T00:00:00+00:00", "updated_at": "2026-11-12T00:00:01+00:00",
+    }
+    persist_job(app.state.db_path, job)
+    _jobs[job["id"]] = dict(job)
+    _job_databases[job["id"]] = str(app.state.db_path)
+
+    response = client.post("/api/v1/jobs/job-queued/cancel")
+    assert response.status_code == 200
+    stored = client.get("/api/v1/jobs/job-queued").json()
+    assert stored["status"] == "cancelled"
+    assert stored["progress"] == 0
+
+
+def test_failed_render_retry_starts_a_new_job(tmp_path) -> None:
+    app.state.db_path = tmp_path / "retry.sqlite3"
+    project = client.post("/api/v1/projects", json={
+        "title": "Retry",
+        "document": {"schemaVersion": 1, "scenes": []},
+    }).json()
+    job = {
+        "id": "job-failed", "project_id": project["id"], "status": "failed",
+        "profile": "youtube-1080p", "fps": 30, "output_path": None, "error": "boom",
+        "duration_seconds": None, "width": None, "height": None, "progress": 0,
+        "created_at": "2026-11-12T00:00:00+00:00", "updated_at": "2026-11-12T00:00:01+00:00",
+    }
+    persist_job(app.state.db_path, job)
+    _jobs.pop(job["id"], None)
+
+    response = client.post("/api/v1/jobs/job-failed/retry")
+    assert response.status_code == 202
+    body = response.json()
+    assert body["job_id"] != "job-failed"
+    assert body["status"] == "queued"
+    listed = client.get(f"/api/v1/projects/{project['id']}/renders").json()
+    assert any(item["id"] == body["job_id"] for item in listed)
