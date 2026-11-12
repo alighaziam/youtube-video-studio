@@ -1,3 +1,5 @@
+import re
+
 from app.rendering import _ass_escape, _ass_time, _build_ass, _scene_visual_filter
 
 
@@ -48,6 +50,21 @@ def test_caption_timing_uses_generated_voice_duration() -> None:
     caption_lines = [line for line in result.splitlines() if ",Caption,," in line]
     assert caption_lines
     assert "0:00:04.25" in caption_lines[-1]
+
+
+def test_caption_lines_keep_one_karaoke_beat_per_word() -> None:
+    result = _build_ass([{
+        "title": "Words",
+        "duration": 4,
+        "narration": "یک دو سه four",
+    }], 1920, 1080)
+    caption_lines = [line for line in result.splitlines() if ",Caption,," in line]
+    assert len(caption_lines) == 1
+    beats = re.findall(r"\\k(\d+)", caption_lines[0])
+    assert beats == [str(int(beat)) for beat in beats]
+    assert len(beats) == 4
+    assert "یک" in caption_lines[0] and "four" in caption_lines[0]
+    assert sum(int(beat) for beat in beats) == 400
 
 
 

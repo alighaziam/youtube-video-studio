@@ -72,3 +72,27 @@
 .scene-delete{border:0;background:transparent;color:#b47c89;font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
 .scene-delete:disabled{opacity:.25;cursor:not-allowed}
 @media(min-width:1181px){.scenes,.inspector,.editor{max-height:calc(100vh - 66px);overflow:auto}}
+.timeline{overflow:hidden}
+.timeline-scroll{overflow-x:auto;overflow-y:hidden;position:relative;cursor:pointer}
+.timeline-canvas{position:relative;min-height:132px;padding-bottom:8px}
+.timeline .ruler{position:relative;height:18px;padding:0}
+.timeline .ruler span{position:absolute;top:0;font:9px "DM Sans";color:#61708d}
+.timeline-lane{position:relative;height:34px;margin:0 0 6px}
+.timeline .clips{display:block;height:36px}
+.timeline .clip{position:absolute;top:0;height:32px;min-width:0}
+.clip-resize{position:absolute;top:0;right:0;width:8px;height:100%;cursor:ew-resize;background:#8a81ff55}
+.timeline .track{height:32px;position:relative}
+.timeline .track b{position:absolute;left:0;top:8px;z-index:2;background:#111a2b}
+.lane-body{position:absolute;left:100px;right:0;top:4px;height:24px}
+.voice-block{position:absolute;top:4px;height:16px;border-radius:3px;background:#3b9c91}
+.caption-word{position:absolute;top:2px;height:20px;overflow:hidden;border-radius:3px;background:#30345d;color:#d7d6ff;font:8px/20px Vazirmatn,sans-serif;padding:0 2px;white-space:nowrap}
+.caption-word.on{background:#6d68c9;color:white}
+.playhead{position:absolute;top:16px;bottom:8px;width:2px;background:#f2f4ff;pointer-events:none}
+.live-caption{position:absolute;left:6%;right:6%;bottom:7%;z-index:30;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border-radius:6px;background:#10182bcc;color:#f4f6ff;font:700 13px/1.4 Vazirmatn,"Segoe UI",Tahoma,sans-serif}
+.live-caption em{font-style:normal;opacity:.55}
+.live-caption em.on{opacity:1;color:#d7d4ff}
+.render-queue{margin-top:12px;padding:10px 12px;border:1px solid #2c3a53;border-radius:8px;background:#101a2b;display:grid;gap:6px}
+.render-queue b{font-size:10px;color:#c9d4e8}
+.render-queue div{display:flex;gap:8px;align-items:center;color:#9aabc4;font-size:10px}
+.render-queue a{color:#b4aaff}
+.render-queue small{overflow-wrap:anywhere}

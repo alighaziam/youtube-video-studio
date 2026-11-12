@@ -3,6 +3,8 @@ from __future__ import annotations
 import platform
 import shutil
 import subprocess
+from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -11,7 +13,7 @@ from pydantic import BaseModel
 
 from app.projects import router as projects_router
 from app.captions import router as captions_router
-from app.rendering import router as rendering_router
+from app.rendering import router as rendering_router, recover_interrupted_jobs
 from app.creator import router as creator_router
 from app.assets import router as assets_router
 from app.voice import router as voice_router
@@ -26,7 +28,13 @@ class CapabilityReport(BaseModel):
     ffprobe_available: bool = False
 
 
-app = FastAPI(title="YouTube Video Production Studio API", version="0.2.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    recover_interrupted_jobs(Path(getattr(_app.state, "db_path", Path(".data/studio.sqlite3"))))
+    yield
+
+
+app = FastAPI(title="YouTube Video Production Studio API", version="0.2.0", lifespan=lifespan)
 app.include_router(projects_router)
 app.include_router(captions_router)
 app.include_router(rendering_router)
@@ -42,6 +50,11 @@ app.add_middleware(
 )
 
 
+def _ffmpeg_table_has(output: str, name: str) -> bool:
+    """Match an FFmpeg filter or encoder name in the second column, not the description."""
+    return any(len(parts := line.split()) > 1 and parts[1] == name for line in output.splitlines())
+
+
 def _capabilities() -> dict[str, Any]:
     ffmpeg = shutil.which("ffmpeg")
     report: dict[str, Any] = {
@@ -55,9 +68,9 @@ def _capabilities() -> dict[str, Any]:
     if version.stdout:
         report["ffmpeg_version"] = version.stdout.splitlines()[0]
     filters = subprocess.run([ffmpeg, "-hide_banner", "-filters"], capture_output=True, text=True, check=False)
-    report["subtitles_filter"] = any(len(p := line.split()) > 1 and p[1] == "subtitles" for line in filters.stdout.splitlines())
+    report["subtitles_filter"] = _ffmpeg_table_has(filters.stdout, "subtitles")
     encoders = subprocess.run([ffmpeg, "-hide_banner", "-encoders"], capture_output=True, text=True, check=False)
-    report["libx264_encoder"] = any(len(p := line.split()) > 1 and p[-1] == "libx264" for line in encoders.stdout.splitlines())
+    report["libx264_encoder"] = _ffmpeg_table_has(encoders.stdout, "libx264")
     return report
 
 

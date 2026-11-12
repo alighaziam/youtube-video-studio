@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 type DiagramNode = { id: string; label: string; x: number; y: number };
 type DiagramEdge = { label: string };
@@ -9,15 +9,34 @@ type Project = { id: string; title: string; document: { schemaVersion: number; s
 type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
 type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
 type CapabilityReport = { ffmpeg_available: boolean; ffprobe_available: boolean; libx264_encoder: boolean; subtitles_filter: boolean };
+type RenderJob = { id: string; project_id?: string; status: string; error?: string | null; width?: number | null; height?: number | null; created_at?: string; duration_seconds?: number | null };
+type CaptionCue = { id: string; text: string; start: number; end: number };
 const API = "http://127.0.0.1:8000/api/v1";
 const starterScenes: Scene[] = [
-  { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12 },
-  { id: "scene-02", title: "Why architecture matters", kind: "مفهوم", duration: 28 },
-  { id: "scene-03", title: "A modular monolith", kind: "دیاگرام معماری", duration: 35 },
-  { id: "scene-04", title: "Module boundaries in code", kind: "نمایش کد", duration: 42 },
-  { id: "scene-05", title: "Trade-offs and recap", kind: "جمع‌بندی", duration: 25 },
+  { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12, narration: "Coupling hides the real cost until the next change." },
+  { id: "scene-02", title: "Why architecture matters", kind: "مفهوم", duration: 28, narration: "Architecture decides which changes stay cheap." },
+  { id: "scene-03", title: "A modular monolith", kind: "دیاگرام معماری", duration: 35, narration: "A modular monolith keeps one deployment and firm module boundaries." },
+  { id: "scene-04", title: "Module boundaries in code", kind: "نمایش کد", duration: 42, narration: "The code should make an illegal dependency hard to write." },
+  { id: "scene-05", title: "Trade-offs and recap", kind: "جمع‌بندی", duration: 25, narration: "Choose the boundary you can defend six months from now." },
 ];
-const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+const formatTime = (seconds: number) => {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+};
+const wordCuesForScene = (scene: Scene, start: number): CaptionCue[] => {
+  const words = (scene.narration ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length || scene.duration <= 0) return [];
+  const weights = words.map((word) => Math.max(1, word.replace(/[^\p{L}\p{N}]+/gu, "").length || word.length));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let cursor = start;
+  return words.map((word, index) => {
+    const span = index === words.length - 1 ? start + scene.duration - cursor : scene.duration * weights[index] / total;
+    const end = cursor + span;
+    const cue = { id: `${scene.id}-${index}`, text: word, start: cursor, end };
+    cursor = end;
+    return cue;
+  });
+};
 const getSuggestedDiagramLabels = (scene?: Scene): string[] => {
   if (!scene) return ["CLIENT", "API", "DATA"];
   const kind = scene.kind.toLowerCase();
@@ -93,6 +112,10 @@ export default function App() {
   const [renderState, setRenderState] = useState("idle");
   const [renderMessage, setRenderMessage] = useState("");
   const [renderDownloadUrl, setRenderDownloadUrl] = useState("");
+  const [renderJobs, setRenderJobs] = useState<RenderJob[]>([]);
+  const [playhead, setPlayhead] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const dragSceneId = useRef("");
   const [scriptText, setScriptText] = useState("");
   const [scriptBusy, setScriptBusy] = useState(false);
   const [publishingPack, setPublishingPack] = useState("");
@@ -108,6 +131,18 @@ export default function App() {
   const fa = locale === "fa";
   const selected = useMemo(() => scenes.find((scene) => scene.id === active) ?? scenes[0], [scenes, active]);
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0);
+  const pixelsPerSecond = 14;
+  const sceneStarts = useMemo(() => {
+    const starts = new Map<string, number>();
+    let cursor = 0;
+    for (const scene of scenes) {
+      starts.set(scene.id, cursor);
+      cursor += scene.duration;
+    }
+    return starts;
+  }, [scenes]);
+  const captionCues = useMemo(() => scenes.flatMap((scene) => wordCuesForScene(scene, sceneStarts.get(scene.id) ?? 0)), [scenes, sceneStarts]);
+  const activeWordIndex = captionCues.findIndex((cue) => playhead >= cue.start && playhead < cue.end);
   const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
   const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
   const selectedDiagram = selected?.diagram ?? makeDefaultDiagram(selected);
@@ -418,6 +453,8 @@ export default function App() {
       const response = await fetch(`${API}/projects/${project.id}/renders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: renderProfile, fps: 30 }) });
       if (!response.ok) throw new Error((await response.json()).detail ?? "Render request failed");
       const result = await response.json(); setRenderJobId(result.job_id);
+      const listed = await fetch(`${API}/projects/${project.id}/renders`);
+      if (listed.ok) setRenderJobs(await listed.json());
     } catch (reason) { setRenderState("failed"); setRenderMessage(reason instanceof Error ? reason.message : "Render failed"); }
   };
 
@@ -430,11 +467,100 @@ export default function App() {
         const job = await response.json(); setRenderState(job.status);
         if (job.status === "completed") { setRenderMessage(`${job.width}×${job.height}`); setRenderDownloadUrl(`${API}/jobs/${renderJobId}/download`); setRenderJobId(null); }
         if (job.status === "failed") { setRenderMessage(job.error ?? "Render failed"); setRenderJobId(null); }
+        if (project && (job.status === "completed" || job.status === "failed" || job.status === "running")) {
+          const listed = await fetch(`${API}/projects/${project.id}/renders`);
+          if (listed.ok) setRenderJobs(await listed.json());
+        }
       } catch (reason) { setRenderState("failed"); setRenderMessage(reason instanceof Error ? reason.message : "Render status error"); setRenderJobId(null); }
     };
     const timer = window.setInterval(poll, 1500); void poll();
     return () => window.clearInterval(timer);
-  }, [renderJobId]);
+  }, [renderJobId, project?.id]);
+
+  useEffect(() => {
+    if (!project) return;
+    let alive = true;
+    fetch(`${API}/projects/${project.id}/renders`)
+      .then(async (response) => { if (!response.ok) throw new Error("queue"); return response.json() as Promise<RenderJob[]>; })
+      .then((jobs) => {
+        if (!alive) return;
+        setRenderJobs(jobs);
+        const activeJob = jobs.find((job) => job.status === "queued" || job.status === "running");
+        if (activeJob) setRenderJobId(activeJob.id);
+      })
+      .catch(() => { if (alive) setRenderJobs([]); });
+    return () => { alive = false; };
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (!playing) return;
+    let last = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const delta = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      setPlayhead((current) => {
+        const next = current + delta;
+        if (next >= totalSeconds) {
+          setPlaying(false);
+          return totalSeconds;
+        }
+        return next;
+      });
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [playing, totalSeconds]);
+
+  useEffect(() => {
+    if (!playing) return;
+    const match = scenes.findIndex((scene, index) => {
+      const start = sceneStarts.get(scene.id) ?? 0;
+      return playhead < start + scene.duration || index === scenes.length - 1;
+    });
+    const next = scenes[match];
+    if (next && next.id !== active) setActive(next.id);
+  }, [playhead, playing, scenes, sceneStarts, active]);
+
+  const selectScene = (id: string) => {
+    setActive(id);
+    setPlayhead(sceneStarts.get(id) ?? 0);
+  };
+  const moveScene = (fromId: string, toId: string) => {
+    if (!fromId || fromId === toId) return;
+    setScenes((items) => {
+      const next = [...items];
+      const from = next.findIndex((scene) => scene.id === fromId);
+      const to = next.findIndex((scene) => scene.id === toId);
+      if (from < 0 || to < 0) return items;
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+  const beginResize = (event: ReactPointerEvent<HTMLElement>, scene: Scene) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const originX = event.clientX;
+    const origin = scene.duration;
+    const move = (ev: PointerEvent) => {
+      const next = Math.max(1, Math.min(3600, Math.round(origin + (ev.clientX - originX) / pixelsPerSecond)));
+      setScenes((items) => items.map((item) => item.id === scene.id ? { ...item, duration: next } : item));
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  };
+  const seekTimeline = (event: React.MouseEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, event.clientX - bounds.left + event.currentTarget.scrollLeft);
+    setPlaying(false);
+    setPlayhead(Math.max(0, Math.min(totalSeconds, x / pixelsPerSecond)));
+  };
 
   const statusLabel = status === "saved" ? (fa ? "ذخیره شد" : "Saved") : status === "saving" ? (fa ? "در حال ذخیره" : "Saving") : status === "loading" ? (fa ? "در حال بارگذاری" : "Loading") : (fa ? "اتصال/ذخیره ناموفق" : "Offline / save error");
 
@@ -485,7 +611,7 @@ export default function App() {
             <button title={fa ? "حذف فایل" : "Delete file"} onClick={() => void removeAsset(asset.id)}>×</button>
           </div>)}</div>}
         </div>
-        {scenes.map((scene,i)=><div key={scene.id} role="button" tabIndex={0} onClick={()=>setActive(scene.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActive(scene.id); } }} className={active===scene.id?"scene selected":"scene"}><span className="thumb">{String(i+1).padStart(2,"0")}<b>{["✧","▤","⌘","{ }","✓"][i%5]}</b></span><span className="scene-text"><strong>{scene.title}</strong><small>{scene.kind}</small><small>{formatTime(scene.duration)}</small></span><button type="button" className="scene-delete" disabled={scenes.length<=1} title={fa ? "حذف صحنه" : "Delete scene"} onClick={(event) => { event.stopPropagation(); removeScene(scene.id); }}>×</button></div>)}
+        {scenes.map((scene,i)=><div key={scene.id} role="button" tabIndex={0} onClick={()=>selectScene(scene.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectScene(scene.id); } }} className={active===scene.id?"scene selected":"scene"}><span className="thumb">{String(i+1).padStart(2,"0")}<b>{["✧","▤","⌘","{ }","✓"][i%5]}</b></span><span className="scene-text"><strong>{scene.title}</strong><small>{scene.kind}</small><small>{formatTime(scene.duration)}</small></span><button type="button" className="scene-delete" disabled={scenes.length<=1} title={fa ? "حذف صحنه" : "Delete scene"} onClick={(event) => { event.stopPropagation(); removeScene(scene.id); }}>×</button></div>)}
         <button className="add" onClick={addScene}>＋　{fa ? "افزودن صحنه" : "Add scene"}</button>
         <div className="hint">✧ {fa ? "تغییرات استوری‌بورد به‌صورت خودکار در پایگاه داده محلی ذخیره می‌شود." : "Storyboard changes are autosaved to your local database."}</div>
       </section>
@@ -498,6 +624,7 @@ export default function App() {
             {previewDiagram && <div className="diagram editor-diagram" style={{"--diagram-accent":previewDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{previewDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>}
             <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
           </div>}
+          {activeWordIndex >= 0 && <div className="live-caption">{captionCues.slice(Math.max(0, activeWordIndex - 2), activeWordIndex + 4).map((cue) => <em key={cue.id} className={cue.id === captionCues[activeWordIndex].id ? "on" : ""}>{cue.text}</em>)}</div>}
           {(selected?.layers ?? []).filter(layer=>layer.visible).sort((a,b)=>a.zIndex-b.zIndex).map(layer => {
             const layerAsset = layer.assetId ? assets.find(asset=>asset.id===layer.assetId) : undefined;
             return <div key={layer.id} className={`canvas-layer layer-${layer.type}`} style={{left:`${layer.x}%`,top:`${layer.y}%`,width:`${layer.width}%`,height:`${layer.height}%`,opacity:layer.opacity,zIndex:layer.zIndex}}>
@@ -508,10 +635,20 @@ export default function App() {
             </div>;
           })}
         </div></div>
-        <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
+        <div className="playback"><button type="button" onClick={() => { if (playhead >= totalSeconds) setPlayhead(0); setPlaying((value) => !value); }}>{playing ? "❚❚" : "▶"}</button><span>{formatTime(playhead)}</span><div className="bar"><i style={{ width: `${totalSeconds ? Math.min(100, (playhead / totalSeconds) * 100) : 0}%` }}/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "تایم‌لاین قابل پخش · تصویر ثابت" : "Playable timeline · static picture"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
-        <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><div className="wave">{scenes.map(scene=>scene.voiceAssetId ? <i key={scene.id} title={scene.title} style={{height: `${Math.max(5,Math.min(20,scene.duration/2))}px`}}/> : null)}{!scenes.some(scene=>scene.voiceAssetId) && <span className="empty-track">{fa ? "هنوز صدایی تولید نشده" : "No voice-over generated"}</span>}</div></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "زیرنویس هنگام رندر از گویندگی ساخته می‌شود" : "Captions are generated from narration at render time"}</span></div></div>
-        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{capabilityWarning && <div className="error-banner">{capabilityWarning}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
+        <div className="timeline" dir="ltr">
+          <div className="timeline-scroll" onClick={seekTimeline}>
+            <div className="timeline-canvas" style={{ width: Math.max(640, totalSeconds * pixelsPerSecond) }}>
+              <div className="ruler">{Array.from({ length: Math.floor(totalSeconds / 10) + 1 }, (_, index) => <span key={index} style={{ left: index * 10 * pixelsPerSecond }}>{formatTime(index * 10)}</span>)}</div>
+              <div className="clips timeline-lane">{scenes.map((scene) => <div key={scene.id} draggable onDragStart={() => { dragSceneId.current = scene.id; }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); moveScene(dragSceneId.current, scene.id); }} onClick={(event) => { event.stopPropagation(); selectScene(scene.id); }} className={active===scene.id?"clip on":"clip"} style={{ left: (sceneStarts.get(scene.id) ?? 0) * pixelsPerSecond, width: Math.max(36, scene.duration * pixelsPerSecond) }}>{scene.title}<i className="clip-resize" onPointerDown={(event) => beginResize(event, scene)} /></div>)}</div>
+              <div className="track timeline-lane"><b>♫　Voice</b><div className="lane-body">{scenes.map((scene) => scene.voiceAssetId ? <i key={scene.id} className="voice-block" style={{ left: (sceneStarts.get(scene.id) ?? 0) * pixelsPerSecond, width: Math.max(8, scene.duration * pixelsPerSecond) }} /> : null)}{!scenes.some((scene) => scene.voiceAssetId) && <span className="empty-track">{fa ? "هنوز صدایی تولید نشده" : "No voice-over generated"}</span>}</div></div>
+              <div className="track timeline-lane"><b>▤　Words</b><div className="lane-body">{captionCues.map((cue) => <span key={cue.id} className={activeWordIndex >= 0 && captionCues[activeWordIndex].id === cue.id ? "caption-word on" : "caption-word"} style={{ left: cue.start * pixelsPerSecond, width: Math.max(10, (cue.end - cue.start) * pixelsPerSecond) }}>{cue.text}</span>)}{captionCues.length === 0 && <span className="empty-track">{fa ? "با متن گویندگی، هر کلمه زمان خودش را می‌گیرد" : "Narration gives each word its own time"}</span>}</div></div>
+              <div className="playhead" style={{ left: playhead * pixelsPerSecond }} />
+            </div>
+          </div>
+        </div>
+        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{capabilityWarning && <div className="error-banner">{capabilityWarning}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{renderJobs.length > 0 && <div className="render-queue"><b>{fa ? "صف رندر" : "Render queue"}</b>{renderJobs.slice(0, 6).map((job) => <div key={job.id}><span>{job.status}</span>{job.width && job.height ? <small>{job.width}×{job.height}</small> : null}{job.status === "completed" && <a href={`${API}/jobs/${job.id}/download`}>{fa ? "دانلود" : "Download"}</a>}{job.error && <small>{job.error}</small>}</div>)}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
       </section>
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>

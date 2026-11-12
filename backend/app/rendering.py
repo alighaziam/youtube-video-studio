@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import sqlite3
@@ -245,7 +244,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             for chunk, weight in zip(chunks, weights):
                 chunk_duration = caption_duration * weight / total_weight
                 end = min(cursor + caption_duration, local_cursor + chunk_duration)
-                events.append(f"Dialogue: 1,{_ass_time(local_cursor)},{_ass_time(end)},Caption,,0,0,0,,{_ass_escape(chunk)}")
+                events.append(f"Dialogue: 1,{_ass_time(local_cursor)},{_ass_time(end)},Caption,,0,0,0,,{_karaoke_text(chunk, max(0.01, end - local_cursor))}")
                 local_cursor = end
         cursor += duration
     return header + "\n".join(events) + "\n"
@@ -318,14 +317,129 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
     return ",".join(filters)
 
 
+def _karaoke_text(chunk: str, seconds: float) -> str:
+    """Readable caption line with one karaoke beat per word."""
+    words = chunk.split()
+    if not words:
+        return ""
+    weights = [max(1, len(re.sub(r"[^\w]", "", word, flags=re.UNICODE)) or len(word)) for word in words]
+    total_weight = sum(weights)
+    total_cs = max(len(words), round(max(0.01, seconds) * 100))
+    assigned = 0
+    parts: list[str] = []
+    for index, (word, weight) in enumerate(zip(words, weights)):
+        if index == len(words) - 1:
+            centiseconds = max(1, total_cs - assigned)
+        else:
+            centiseconds = max(1, round(total_cs * weight / total_weight))
+            assigned += centiseconds
+        parts.append("{\\k" + str(centiseconds) + "}" + _ass_escape(word))
+    return " ".join(parts)
+
+
+_job_databases: dict[str, str] = {}
+_recovered_queues: set[str] = set()
+
+
+def _ensure_job_table(db: sqlite3.Connection) -> None:
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS render_jobs (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            profile TEXT,
+            fps INTEGER,
+            output_path TEXT,
+            error TEXT,
+            duration_seconds REAL,
+            width INTEGER,
+            height INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"""
+    )
+
+
+def _job_row(job: dict[str, Any]) -> tuple[Any, ...]:
+    now = str(job.get("updated_at") or datetime.now(timezone.utc).isoformat())
+    return (
+        job["id"], str(job.get("project_id") or ""), str(job.get("status") or "queued"),
+        job.get("profile"), job.get("fps"), job.get("output_path"), job.get("error"),
+        job.get("duration_seconds"), job.get("width"), job.get("height"),
+        str(job.get("created_at") or now), now,
+    )
+
+
+def persist_job(db_path: Path | str, job: dict[str, Any]) -> None:
+    with sqlite3.connect(db_path) as db:
+        _ensure_job_table(db)
+        db.execute(
+            """INSERT INTO render_jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 project_id=excluded.project_id, status=excluded.status, profile=excluded.profile,
+                 fps=excluded.fps, output_path=excluded.output_path, error=excluded.error,
+                 duration_seconds=excluded.duration_seconds, width=excluded.width, height=excluded.height,
+                 updated_at=excluded.updated_at""",
+            _job_row(job),
+        )
+
+
+def _load_job(db_path: Path | str, job_id: str) -> dict[str, Any] | None:
+    if not Path(db_path).exists():
+        return None
+    with sqlite3.connect(db_path) as db:
+        db.row_factory = sqlite3.Row
+        _ensure_job_table(db)
+        row = db.execute("SELECT * FROM render_jobs WHERE id = ?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_jobs(db_path: Path | str, project_id: str) -> list[dict[str, Any]]:
+    if not Path(db_path).exists():
+        return []
+    with sqlite3.connect(db_path) as db:
+        db.row_factory = sqlite3.Row
+        _ensure_job_table(db)
+        rows = db.execute(
+            "SELECT * FROM render_jobs WHERE project_id = ? ORDER BY created_at DESC LIMIT 20",
+            (project_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def recover_interrupted_jobs(db_path: Path | str, *, force: bool = False) -> None:
+    key = str(db_path)
+    if key in _recovered_queues and not force:
+        return
+    if not force:
+        _recovered_queues.add(key)
+    if not Path(db_path).exists():
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    with sqlite3.connect(db_path) as db:
+        _ensure_job_table(db)
+        db.execute(
+            """UPDATE render_jobs SET status = 'failed', error = ?, updated_at = ?
+               WHERE status IN ('queued', 'running')""",
+            ("Render was interrupted because the API process restarted.", now),
+        )
+
+
 def _set_job(job_id: str, **values: Any) -> None:
     with _jobs_lock:
+        if job_id not in _jobs:
+            return
         _jobs[job_id].update(values)
         _jobs[job_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
+        snapshot = dict(_jobs[job_id])
+        db_path = _job_databases.get(job_id)
+    if db_path:
+        persist_job(db_path, snapshot)
 
 
 def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
     try:
+        _set_job(job_id, status="running")
         ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
         if not ffmpeg or not ffprobe:
             raise RuntimeError("FFmpeg and ffprobe must be installed and available on PATH.")
@@ -486,7 +600,7 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
                 raise RuntimeError("Rendered video dimensions do not match the selected profile.")
             if voice_inputs and not any(stream.get("codec_type") == "audio" for stream in streams):
                 raise RuntimeError("Generated narration was not present in the final MP4.")
-            os.replace(temporary_output, final_path)
+            shutil.move(temporary_output, final_path)
             duration = float(metadata.get("format", {}).get("duration", total_duration))
         _set_job(job_id, status="completed", output_path=str(final_path), duration_seconds=duration,
                  width=width, height=height, error=None)
@@ -504,32 +618,47 @@ def create_render(project_id: str, payload: RenderRequest, background: Backgroun
         raise HTTPException(status_code=404, detail="Project not found")
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    job = {"id": job_id, "project_id": project_id, "status": "queued", "profile": payload.profile,
+           "fps": payload.fps, "created_at": now, "updated_at": now, "output_path": None,
+           "error": None, "duration_seconds": None, "width": None, "height": None}
     with _jobs_lock:
-        _jobs[job_id] = {"id": job_id, "project_id": project_id, "status": "queued",
-                         "created_at": now, "updated_at": now, "output_path": None, "error": None}
+        _jobs[job_id] = job
+        _job_databases[job_id] = str(db_path)
+    persist_job(db_path, job)
     output_dir = str(Path(getattr(request.app.state, "render_dir", Path(".data/renders"))))
     background.add_task(_render, job_id, str(db_path), output_dir, project_id, payload.profile, payload.fps, str(Path(getattr(request.app.state, "assets_dir", Path(".data/assets")))))
     return {"job_id": job_id, "status": "queued"}
 
 
-@router.get("/api/v1/jobs/{job_id}")
-def get_render_job(job_id: str) -> dict[str, Any]:
+@router.get("/api/v1/projects/{project_id}/renders")
+def list_project_renders(project_id: str, request: Request) -> list[dict[str, Any]]:
+    db_path = Path(getattr(request.app.state, "db_path", Path(".data/studio.sqlite3")))
+    return list_jobs(db_path, project_id)
+
+
+def _resolve_job(job_id: str, request: Request) -> dict[str, Any]:
     with _jobs_lock:
         job = _jobs.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="Render job not found")
-        return dict(job)
+        if job is not None:
+            return dict(job)
+    db_path = Path(getattr(request.app.state, "db_path", Path(".data/studio.sqlite3")))
+    stored = _load_job(db_path, job_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    return stored
+
+
+@router.get("/api/v1/jobs/{job_id}")
+def get_render_job(job_id: str, request: Request) -> dict[str, Any]:
+    return _resolve_job(job_id, request)
 
 
 @router.get("/api/v1/jobs/{job_id}/download")
-def download_render(job_id: str):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="Render job not found")
-        if job.get("status") != "completed" or not job.get("output_path"):
-            raise HTTPException(status_code=409, detail="Render output is not ready")
-        output_path = Path(job["output_path"]).resolve()
+def download_render(job_id: str, request: Request):
+    job = _resolve_job(job_id, request)
+    if job.get("status") != "completed" or not job.get("output_path"):
+        raise HTTPException(status_code=409, detail="Render output is not ready")
+    output_path = Path(job["output_path"]).resolve()
     if not output_path.is_file():
         raise HTTPException(status_code=404, detail="Render output file no longer exists")
     return FileResponse(output_path, media_type="video/mp4", filename=output_path.name)
