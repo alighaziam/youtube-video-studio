@@ -1,6 +1,6 @@
 import json
 import os
-import shutil
+import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -9,6 +9,18 @@ from app.main import app
 import app.voice as voice_module
 
 client = TestClient(app)
+
+
+def _fake_piper(directory: Path, source: str) -> str:
+    """Return a Piper stand-in that subprocess can launch on Windows and Linux."""
+    script = directory / "piper.py"
+    script.write_text(source, encoding="utf-8")
+    if os.name == "nt":
+        launcher = directory / "piper.cmd"
+        launcher.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+        return str(launcher)
+    script.chmod(0o755)
+    return str(script)
 
 
 def test_voice_catalog_lists_installed_local_models(tmp_path: Path) -> None:
@@ -41,16 +53,12 @@ def test_generate_voiceovers_registers_wav_assets(tmp_path: Path, monkeypatch) -
             {"id": "scene-a", "title": "Intro", "duration": 4, "narration": "Hello from a local voice."},
         ]},
     }).json()
-    fake_piper = tmp_path / "piper"
-    fake_piper.write_text(
-        "#!/usr/bin/env python3\n"
+    fake_piper = _fake_piper(tmp_path, (
         "import pathlib, sys\n"
         "output = pathlib.Path(sys.argv[sys.argv.index('--output_file') + 1])\n"
-        "output.write_bytes(b'RIFF' + b'fake-wav-data')\n",
-        encoding="utf-8",
-    )
-    fake_piper.chmod(0o755)
-    monkeypatch.setattr(voice_module, "_piper_binary", lambda: str(fake_piper))
+        "output.write_bytes(b'RIFF' + b'fake-wav-data')\n"
+    ))
+    monkeypatch.setattr(voice_module, "_piper_binary", lambda: fake_piper)
     response = client.post(f"/api/v1/projects/{project['id']}/voiceovers", json={"voice_id": "test.onnx"})
     assert response.status_code == 201, response.text
     generated = response.json()["generated"][0]
@@ -78,10 +86,8 @@ def test_generate_voiceovers_rolls_back_when_a_later_scene_fails(tmp_path: Path,
         ]},
     }).json()
 
-    fake_piper = tmp_path / "piper"
     counter = tmp_path / "piper-count.txt"
-    fake_piper.write_text(
-        "#!/usr/bin/env python3\n"
+    fake_piper = _fake_piper(tmp_path, (
         "import pathlib, sys\n"
         f"counter = pathlib.Path({str(counter)!r})\n"
         "count = int(counter.read_text() if counter.exists() else '0') + 1\n"
@@ -90,11 +96,9 @@ def test_generate_voiceovers_rolls_back_when_a_later_scene_fails(tmp_path: Path,
         "    print('simulated second-scene failure', file=sys.stderr)\n"
         "    raise SystemExit(1)\n"
         "output = pathlib.Path(sys.argv[sys.argv.index('--output_file') + 1])\n"
-        "output.write_bytes(b'RIFF' + b'fake-wav-data')\n",
-        encoding="utf-8",
-    )
-    fake_piper.chmod(0o755)
-    monkeypatch.setattr(voice_module, "_piper_binary", lambda: str(fake_piper))
+        "output.write_bytes(b'RIFF' + b'fake-wav-data')\n"
+    ))
+    monkeypatch.setattr(voice_module, "_piper_binary", lambda: fake_piper)
 
     response = client.post(
         f"/api/v1/projects/{project['id']}/voiceovers",

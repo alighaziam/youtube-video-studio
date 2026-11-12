@@ -12,7 +12,7 @@ def test_ass_document_contains_timed_scene_events() -> None:
         {"title": "Modular Monolith", "duration": 6},
     ], 1920, 1080)
     assert "PlayResX: 1920" in result
-    assert "0:00:00.00,0:00:04.00" in result
+    assert "0:00:00.00,0:00:03.00,Title" in result
     assert "0:00:04.00,0:00:10.00" in result
     assert "سلام دنیا" in result
 
@@ -137,6 +137,26 @@ def test_custom_diagram_nodes_edges_positions_and_color_are_used() -> None:
     assert "drawbox=x=163" in filters
 
 
+def test_custom_diagram_boxes_stay_inside_the_frame() -> None:
+    import re
+
+    scene = {
+        "kind": "Architecture diagram",
+        "diagram": {
+            "nodes": [
+                {"id": "a", "label": "EDGE", "x": 5, "y": 12},
+                {"id": "b", "label": "FAR", "x": 95, "y": 82},
+            ],
+            "edges": [{"label": "LINK"}],
+            "accentColor": "#7187ff",
+        },
+    }
+    filters = _scene_visual_filter(scene, 1920, 1080, 30)
+    boxes = [tuple(map(int, match.groups())) for match in re.finditer(r"drawbox=x=(-?\d+):y=(-?\d+):w=(-?\d+):h=(-?\d+)", filters)]
+    assert boxes
+    assert all(x >= 0 and y >= 0 and x + w <= 1920 and y + h <= 1080 for x, y, w, h in boxes)
+
+
 
 def test_scene_layer_normalization_clamps_geometry_and_sorts_z_order() -> None:
     from app.rendering import _normalize_scene_layers
@@ -175,7 +195,8 @@ def test_scene_layer_filter_composites_media_in_z_order() -> None:
         {"id": "back", "type": "video", "x": 10, "y": 10, "width": 40, "height": 50, "zIndex": 1, "opacity": 1, "visible": True},
         {"id": "hidden", "type": "image", "visible": False},
     ])
-    assert [layer["id"] for layer in layers] == ["back", "front"]
+    assert [layer["id"] for layer in layers] == ["back", "front", "hidden"]
+    assert layers[2]["visible"] is False
     graph, output = _scene_layer_filter(
         {"kind": "Concept"}, 1920, 1080, 30,
         [(layers[0], Path("/tmp/back.mp4")), (layers[1], Path("/tmp/front.png"))],

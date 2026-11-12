@@ -8,6 +8,7 @@ type Scene = { id: string; title: string; kind: string; duration: number; narrat
 type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
 type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
 type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
+type CapabilityReport = { ffmpeg_available: boolean; ffprobe_available: boolean; libx264_encoder: boolean; subtitles_filter: boolean };
 const API = "http://127.0.0.1:8000/api/v1";
 const starterScenes: Scene[] = [
   { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12 },
@@ -39,6 +40,40 @@ const makeDefaultDiagram = (scene?: Scene): SceneDiagram => {
     accentColor: "#7187ff",
   };
 };
+const sceneSuggestsDiagram = (scene?: Scene): boolean => {
+  if (!scene) return false;
+  const kind = scene.kind.toLowerCase();
+  if (kind.includes("code") || kind.includes("کد") || kind.includes("comparison") || kind.includes("مقایسه")) return false;
+  const text = [scene.title, scene.narration ?? "", scene.kind].join(" ").toLowerCase();
+  if (/trade.?off|tradeoff| versus | vs |در مقابل|مزیت و عیب/.test(text)) return false;
+  return /معماری|دیاگرام|architecture|diagram|service|سرویس|module|ماژول|event.?driven|kafka|rabbitmq|gateway|گیت|مونولیت|microservice|میکروسرویس|database|postgres|دیتابیس|پایگاه داده|authentication|oauth|احراز هویت/.test(text);
+};
+let startupRequest: Promise<{ projects: Project[]; current: Project }> | null = null;
+function loadStartupProject(): Promise<{ projects: Project[]; current: Project }> {
+  if (!startupRequest) {
+    startupRequest = (async () => {
+      const response = await fetch(`${API}/projects`);
+      if (!response.ok) throw new Error("Backend is not reachable. Start the API server first.");
+      let projects: Project[] = await response.json();
+      if (!projects.length) {
+        const created = await fetch(`${API}/projects`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "Lesson 08 — Modular Monolith in Practice",
+            document: { schemaVersion: 1, profile: { aspectRatio: "16:9", width: 1920, height: 1080, fps: 30 }, language: "fa", scenes: starterScenes, audioTracks: [], captionTracks: [] },
+          }),
+        });
+        if (!created.ok) throw new Error("Could not create the starter project.");
+        projects = [await created.json()];
+      }
+      return { projects, current: projects[0] };
+    })().catch((error: unknown) => {
+      startupRequest = null;
+      throw error;
+    });
+  }
+  return startupRequest;
+}
 
 
 export default function App() {
@@ -47,6 +82,9 @@ export default function App() {
   const [tab, setTab] = useState("design");
   const [scenes, setScenes] = useState<Scene[]>(starterScenes);
   const [project, setProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [nav, setNav] = useState<"editor" | "projects">("editor");
+  const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -73,58 +111,58 @@ export default function App() {
   const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
   const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
   const selectedDiagram = selected?.diagram ?? makeDefaultDiagram(selected);
+  const previewDiagram = selected?.diagram ?? (sceneSuggestsDiagram(selected) ? makeDefaultDiagram(selected) : null);
+  const capabilityWarning = capabilities && (!capabilities.ffmpeg_available || !capabilities.ffprobe_available || !capabilities.libx264_encoder || !capabilities.subtitles_filter)
+    ? (fa ? "FFmpeg کامل پیدا نشد. رندر MP4 به ffmpeg، ffprobe، رمزگذار libx264 و فیلتر subtitles روی PATH نیاز دارد." : "FFmpeg is incomplete. MP4 render needs ffmpeg, ffprobe, libx264, and the subtitles filter on PATH.")
+    : "";
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        const response = await fetch(`${API}/projects`);
-        if (!response.ok) throw new Error("Backend is not reachable. Start the API server first.");
-        const projects: Project[] = await response.json();
-        let current = projects[0];
-        if (!current) {
-          const created = await fetch(`${API}/projects`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: "Lesson 08 — Modular Monolith in Practice",
-              document: { schemaVersion: 1, profile: { aspectRatio: "16:9", width: 1920, height: 1080, fps: 30 }, language: "fa", scenes: starterScenes, audioTracks: [], captionTracks: [] },
-            }),
-          });
-          if (!created.ok) throw new Error("Could not create the starter project.");
-          current = await created.json();
-        }
+    loadStartupProject()
+      .then(({ projects: loaded, current }) => {
         if (!alive) return;
         const restored = Array.isArray(current.document?.scenes) && current.document.scenes.length ? current.document.scenes : starterScenes;
+        setProjects(loaded);
         setProject(current);
         setScenes(restored);
         setActive(restored[0].id);
         setStatus("saved");
         setHydrated(true);
-      } catch (reason) {
+      })
+      .catch((reason: unknown) => {
         if (!alive) return;
         setError(reason instanceof Error ? reason.message : "Unknown API error");
         setStatus("offline");
-      }
-    })();
+      });
+    fetch(`${API}/system/capabilities`)
+      .then(async (response) => { if (!response.ok) throw new Error("capabilities"); return response.json() as Promise<CapabilityReport>; })
+      .then((report) => { if (alive) setCapabilities(report); })
+      .catch(() => { if (alive) setCapabilities(null); });
     return () => { alive = false; };
   }, []);
 
   useEffect(() => {
     if (!hydrated || !project) return;
+    const controller = new AbortController();
+    const projectId = project.id;
+    const document = project.document;
+    const snapshot = scenes;
     setStatus("saving");
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(`${API}/projects/${project.id}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ document: { ...project.document, scenes } }),
+        const response = await fetch(`${API}/projects/${projectId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+          body: JSON.stringify({ document: { ...document, scenes: snapshot } }),
         });
         if (!response.ok) throw new Error("Autosave failed");
+        setProject((current) => current && current.id === projectId ? { ...current, document: { ...current.document, scenes: snapshot } } : current);
         setStatus("saved");
-      } catch {
+      } catch (reason) {
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
         setStatus("error");
       }
     }, 650);
-    return () => window.clearTimeout(timer);
+    return () => { controller.abort(); window.clearTimeout(timer); };
   }, [scenes, hydrated, project?.id]);
 
 
@@ -242,6 +280,63 @@ export default function App() {
     setScenes((items) => [...items, next]);
     setActive(next.id);
   };
+  const removeScene = (id: string) => {
+    const next = scenes.filter((scene) => scene.id !== id);
+    if (!next.length || next.length === scenes.length) return;
+    setScenes(next);
+    if (id === active) setActive(next[0].id);
+  };
+  const openProject = async (next: Project) => {
+    if (project && project.id !== next.id) {
+      const saved = await fetch(`${API}/projects/${project.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: { ...project.document, scenes } }),
+      });
+      if (!saved.ok) {
+        setError(fa ? "قبل از عوض کردن پروژه، ذخیرهٔ صحنهٔ فعلی ناموفق بود." : "Could not save the current project before switching.");
+        setStatus("error");
+        return;
+      }
+    }
+    const restored = Array.isArray(next.document?.scenes) && next.document.scenes.length ? next.document.scenes : starterScenes;
+    setProject(next);
+    setScenes(restored);
+    setActive(restored[0].id);
+    setStatus("saved");
+    setHydrated(true);
+    setNav("editor");
+    setError("");
+    setPublishingPack("");
+    setRenderJobId(null);
+    setRenderState("idle");
+    setRenderMessage("");
+    setRenderDownloadUrl("");
+  };
+  const renameProject = async (title: string) => {
+    if (!project) return;
+    const next = title.trim().slice(0, 160);
+    const previous = projects.find((item) => item.id === project.id)?.title ?? project.title;
+    if (!next) {
+      setProject((current) => current ? { ...current, title: previous } : current);
+      return;
+    }
+    if (next === previous) return;
+    try {
+      const response = await fetch(`${API}/projects/${project.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!response.ok) throw new Error(fa ? "تغییر نام پروژه ذخیره نشد." : "Could not rename the project.");
+      setProject((current) => current ? { ...current, title: next } : current);
+      setProjects((list) => list.map((item) => item.id === project.id ? { ...item, title: next } : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not rename the project.");
+    }
+  };
+  const focusPanel = (id: string) => {
+    setNav("editor");
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
   const updateSelected = (patch: Partial<Scene>) => setScenes((items) => items.map((scene) => scene.id === active ? { ...scene, ...patch } : scene));
   const updateDiagram = (patch: Partial<SceneDiagram>) => updateSelected({ diagram: { ...selectedDiagram, ...patch } });
   const updateDiagramNode = (index: number, patch: Partial<DiagramNode>) => updateDiagram({ nodes: selectedDiagram.nodes.map((node, nodeIndex) => nodeIndex === index ? { ...node, ...patch } : node) });
@@ -255,7 +350,7 @@ export default function App() {
       name: type === "image" ? "Image layer" : type === "video" ? "Video layer" : type === "code" ? "Code layer" : type === "diagram" ? "Diagram layer" : "Text layer",
       x: 12 + (count % 3) * 8, y: 16 + (count % 3) * 8, width: 42, height: 28,
       zIndex: count + 1, opacity: 1, visible: true,
-      content: type === "code" ? "public void handle() {\\n  // your code\\n}" : type === "diagram" ? "CLIENT → API → DATA" : type === "text" ? "Your text" : undefined,
+      content: type === "code" ? "public void handle() {\n  // your code\n}" : type === "diagram" ? "CLIENT → API → DATA" : type === "text" ? "Your text" : undefined,
     };
     updateSelected({ layers: [...(selected.layers ?? []), layer] });
   };
@@ -346,22 +441,29 @@ export default function App() {
   return <div className={fa ? "app rtl" : "app ltr"} dir={fa ? "rtl" : "ltr"}>
     <header className="topbar">
       <div className="brand"><span className="logo">▣</span><div><b>FrameLab</b><small>VIDEO PRODUCTION STUDIO</small></div></div>
-      <div className="project"><i/> {project?.title ?? (fa ? "در حال بارگذاری پروژه..." : "Loading project...")} <small className="save-status">{statusLabel}</small></div>
+      <div className="project"><i/> <input className="project-title" aria-label={fa ? "نام پروژه" : "Project title"} value={project?.title ?? ""} placeholder={fa ? "در حال بارگذاری پروژه..." : "Loading project..."} disabled={!project} onChange={(event) => setProject((current) => current ? { ...current, title: event.target.value } : current)} onBlur={(event) => { void renameProject(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /> <small className="save-status">{statusLabel}</small></div>
       <div className="actions"><button onClick={() => setLocale(fa ? "en" : "fa")}>{fa ? "EN" : "فا"}</button><button onClick={generatePublishingPack}>{fa ? "بسته انتشار" : "YT pack"}</button><button onClick={() => setRenderProfile(renderProfile === "youtube-1080p" ? "shorts-1080p" : "youtube-1080p")}>{renderProfile === "youtube-1080p" ? "16:9" : "9:16"}</button><button className="primary" onClick={startRender} disabled={!project || renderState === "queued" || renderState === "running"}>{renderState === "queued" || renderState === "running" ? (fa ? "در حال رندر..." : "Rendering...") : (fa ? "رندر MP4" : "Render MP4")}</button></div>
     </header>
     <aside className="sidebar">
       <label>{fa ? "فضای تولید" : "WORKSPACE"}</label>
-      <a className="active">▣　{fa ? "ویرایشگر ویدیو" : "Video editor"}</a><a>▤　{fa ? "پروژه‌ها" : "Projects"}</a><a>▧　{fa ? "قالب‌ها و برند" : "Templates & brand"}</a><a>▣　{fa ? "کتابخانه رسانه" : "Media library"}</a>
+      <button type="button" className={nav === "editor" ? "nav-button active" : "nav-button"} onClick={() => setNav("editor")}>▣　{fa ? "ویرایشگر ویدیو" : "Video editor"}</button>
+      <button type="button" className={nav === "projects" ? "nav-button active" : "nav-button"} onClick={() => setNav("projects")}>▤　{fa ? "پروژه‌ها" : "Projects"}</button>
+      <button type="button" className="nav-button" disabled title={fa ? "به‌زودی" : "Coming soon"}>▧　{fa ? "قالب‌ها و برند" : "Templates & brand"}</button>
+      <button type="button" className="nav-button" onClick={() => focusPanel("media-library")}>▣　{fa ? "کتابخانه رسانه" : "Media library"}</button>
       <hr/><label>{fa ? "مراحل تولید" : "PRODUCTION"}</label>
-      <a>✎　{fa ? "سناریو و استوری‌بورد" : "Script & storyboard"}</a><a>♫　{fa ? "گویندگی و صدا" : "Voice & audio"}</a><a>▤　{fa ? "زیرنویس" : "Subtitles"}</a><a>✧　{fa ? "بسته انتشار" : "Publishing pack"}</a>
+      <button type="button" className="nav-button" onClick={() => focusPanel("script-input")}>✎　{fa ? "سناریو و استوری‌بورد" : "Script & storyboard"}</button>
+      <button type="button" className="nav-button" onClick={() => focusPanel("voice-panel")}>♫　{fa ? "گویندگی و صدا" : "Voice & audio"}</button>
+      <button type="button" className="nav-button" disabled title={fa ? "زیرنویس هنگام رندر از روی گویندگی ساخته می‌شود." : "Captions are generated from narration during render."}>▤　{fa ? "زیرنویس" : "Subtitles"}</button>
+      <button type="button" className="nav-button" onClick={() => void generatePublishingPack()}>✧　{fa ? "بسته انتشار" : "Publishing pack"}</button>
+      {nav === "projects" && <div className="project-switch">{projects.map((item) => <button type="button" key={item.id} className={item.id === project?.id ? "active" : ""} onClick={() => void openProject(item)}>{item.title}</button>)}</div>}
       <div className="local">● {fa ? "پردازش محلی · بدون فضای ابری" : "Local processing · No cloud"}</div>
     </aside>
     <main className="main">
       <section className="scenes">
         <div className="heading"><div><small>STORYBOARD</small><h2>{fa ? "صحنه‌های ویدیو" : "Video scenes"} <em>{String(scenes.length).padStart(2,"0")}</em></h2></div><button onClick={addScene}>＋</button></div>
-        <textarea className="script-input" value={scriptText} onChange={event=>setScriptText(event.target.value)} placeholder={fa ? "سناریوی درس را اینجا وارد کن؛ هر پاراگراف یک صحنه می‌شود..." : "Paste your lesson script. Each paragraph becomes a scene..."} />
+        <textarea id="script-input" className="script-input" value={scriptText} onChange={event=>setScriptText(event.target.value)} placeholder={fa ? "سناریوی درس را اینجا وارد کن؛ هر پاراگراف یک صحنه می‌شود..." : "Paste your lesson script. Each paragraph becomes a scene..."} />
         <button className="add script-button" onClick={generateStoryboard} disabled={scriptBusy || !scriptText.trim()}>{scriptBusy ? (fa ? "در حال ساخت..." : "Generating...") : (fa ? "تبدیل سناریو به استوری‌بورد" : "Generate storyboard from script")}</button>
-        <div className="voice-panel">
+        <div id="voice-panel" className="voice-panel">
           <div className="media-heading"><b>{fa ? "گویندگی خودکار با صدای محلی" : "Local AI voice-over"}</b><span>{voices.length} {fa ? "صدا" : "voices"}</span></div>
           <select className="field edit-field" value={voiceId} onChange={event=>setVoiceId(event.target.value)} disabled={!voices.length || voiceBusy}>
             {voices.length ? voices.map(voice=><option key={voice.id} value={voice.id}>{voice.name}{voice.language ? " · "+voice.language : ""}</option>) : <option value="">{fa ? "صدای محلی نصب نشده" : "No local voices installed"}</option>}
@@ -370,7 +472,7 @@ export default function App() {
           {voiceProgress && <small className="media-limit">{voiceProgress}</small>}{voiceError && <div className="media-error">{voiceError}</div>}
           {(!voices.length || !voiceEngineAvailable) && <small className="media-limit">{!voiceEngineAvailable ? (fa ? "موتور Piper نصب یا در PATH پیدا نشده است؛ راهنمای نصب را ببین." : "Piper is not installed or not available on PATH; see setup guide.") : (fa ? "مدل صدای محلی نصب نشده است؛ راهنمای نصب را ببین." : "No local voice models installed; see setup guide.")}</small>}
         </div>
-        <div className="media-library">
+        <div id="media-library" className="media-library">
           <div className="media-heading"><b>{fa ? "کتابخانه رسانه" : "Media library"}</b><span>{assets.length}</span></div>
           <label className="upload-control">{assetBusy ? (fa ? "در حال بارگذاری..." : "Uploading...") : (fa ? "＋ افزودن تصویر / ویدیو / صدا" : "＋ Add image / video / audio")}
             <input type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/ogg" disabled={assetBusy} onChange={event => { void uploadAsset(event.target.files?.[0]); event.currentTarget.value = ""; }}/>
@@ -383,7 +485,7 @@ export default function App() {
             <button title={fa ? "حذف فایل" : "Delete file"} onClick={() => void removeAsset(asset.id)}>×</button>
           </div>)}</div>}
         </div>
-        {scenes.map((scene,i)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"scene selected":"scene"}><span className="thumb">{String(i+1).padStart(2,"0")}<b>{["✧","▤","⌘","{ }","✓"][i%5]}</b></span><span className="scene-text"><strong>{scene.title}</strong><small>{scene.kind}</small><small>{formatTime(scene.duration)}</small></span><span className="dots">···</span></button>)}
+        {scenes.map((scene,i)=><div key={scene.id} role="button" tabIndex={0} onClick={()=>setActive(scene.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActive(scene.id); } }} className={active===scene.id?"scene selected":"scene"}><span className="thumb">{String(i+1).padStart(2,"0")}<b>{["✧","▤","⌘","{ }","✓"][i%5]}</b></span><span className="scene-text"><strong>{scene.title}</strong><small>{scene.kind}</small><small>{formatTime(scene.duration)}</small></span><button type="button" className="scene-delete" disabled={scenes.length<=1} title={fa ? "حذف صحنه" : "Delete scene"} onClick={(event) => { event.stopPropagation(); removeScene(scene.id); }}>×</button></div>)}
         <button className="add" onClick={addScene}>＋　{fa ? "افزودن صحنه" : "Add scene"}</button>
         <div className="hint">✧ {fa ? "تغییرات استوری‌بورد به‌صورت خودکار در پایگاه داده محلی ذخیره می‌شود." : "Storyboard changes are autosaved to your local database."}</div>
       </section>
@@ -393,7 +495,7 @@ export default function App() {
           {selectedAsset && (selectedAsset.mime_type.startsWith("image/") || selectedAsset.mime_type.startsWith("video/")) ? <div className="canvas-base-media">{selectedAsset.mime_type.startsWith("image/") ? <img src={assetUrl(selectedAsset.id)} alt={selectedAsset.name}/> : <video src={assetUrl(selectedAsset.id)} controls preload="metadata"/>}</div> : <div className="slide">
             <div className="slide-meta"><span>{(selected?.kind ?? "CONCEPT").toUpperCase()}</span><span>{String(scenes.findIndex(s=>s.id===active)+1).padStart(2,"0")} — {String(scenes.length).padStart(2,"0")}</span></div>
             <div className="hero"><small>{fa ? "پیش‌نمایش قالب صحنه" : "SCENE TEMPLATE PREVIEW"}</small><h1>{selected?.title ?? (fa ? "صحنه جدید" : "New scene")}</h1><p>{selected?.narration ?? (fa ? "متن گویندگی این صحنه در این قسمت نمایش داده می‌شود." : "Scene narration will appear here.")}</p></div>
-            <div className="diagram editor-diagram" style={{"--diagram-accent":selectedDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{selectedDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>
+            {previewDiagram && <div className="diagram editor-diagram" style={{"--diagram-accent":previewDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{previewDiagram.nodes.map((node,index)=><div key={node.id} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>}
             <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>STATIC · NO AUTO MOTION</span></div>
           </div>}
           {(selected?.layers ?? []).filter(layer=>layer.visible).sort((a,b)=>a.zIndex-b.zIndex).map(layer => {
@@ -408,13 +510,14 @@ export default function App() {
         </div></div>
         <div className="playback"><button disabled>▶</button><span>{formatTime(selected?.duration ?? 0)}</span><div className="bar"><i/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "پیش‌نمایش ثابت · بدون حرکت خودکار" : "Static preview · no auto motion"}</small></div>
         <div className="timeline-head"><div><small>SCENE SEQUENCE</small><b>{fa ? "تایم‌لاین" : "Timeline"}</b></div><span>{formatTime(totalSeconds)}</span></div>
-        <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><div className="wave">{scenes.map(scene=>scene.voiceAssetId ? <i key={scene.id} title={scene.title} style={{height: `${Math.max(5,Math.min(20,scene.duration/2))}px`}}/> : null)}{!scenes.some(scene=>scene.voiceAssetId) && <span className="empty-track">{fa ? "هنوز صدایی تولید نشده" : "No voice-over generated"}</span>}</div></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "هنوز زیرنویسی اضافه نشده" : "No captions added yet"}</span></div></div>
-        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
+        <div className="timeline"><div className="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span></div><div className="clips">{scenes.map((scene)=><button key={scene.id} onClick={()=>setActive(scene.id)} className={active===scene.id?"clip on":"clip"}>{scene.title}</button>)}</div><div className="track"><b>♫　Voice-over</b><div className="wave">{scenes.map(scene=>scene.voiceAssetId ? <i key={scene.id} title={scene.title} style={{height: `${Math.max(5,Math.min(20,scene.duration/2))}px`}}/> : null)}{!scenes.some(scene=>scene.voiceAssetId) && <span className="empty-track">{fa ? "هنوز صدایی تولید نشده" : "No voice-over generated"}</span>}</div></div><div className="track"><b>▤　Captions</b><span className="empty-track">{fa ? "زیرنویس هنگام رندر از گویندگی ساخته می‌شود" : "Captions are generated from narration at render time"}</span></div></div>
+        {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{capabilityWarning && <div className="error-banner">{capabilityWarning}</div>}{renderMessage && <div className={renderState === "failed" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{publishingPack && <pre className="publishing-pack">{publishingPack}</pre>}
       </section>
       <aside className="inspector">
         <small>PROPERTIES</small><h2>{fa ? "بازرس صحنه" : "Scene inspector"}</h2>
         <nav>{[["design",fa?"طراحی":"Design"],["motion",fa?"حرکت":"Motion"],["audio",fa?"صدا":"Audio"],["timing",fa?"زمان":"Timing"]].map(([k,v])=><button className={tab===k?"chosen":""} onClick={()=>setTab(k)} key={k}>{v}</button>)}</nav>
-        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"گویندگی این صحنه":"Scene voice-over"}</h3>{selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)}/><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa?"هنوز صدایی برای این صحنه تولید نشده است.":"No generated voice-over for this scene yet."}</p>}<h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.filter(asset=>asset.mime_type.startsWith("image/") || asset.mime_type.startsWith("video/")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}<h3>{fa?"دیاگرام قابل ویرایش":"Editable diagram"}</h3>
+        {tab==="design"?<><h3>{fa?"محتوای صحنه":"Scene content"}</h3><label>{fa?"عنوان":"Title"}</label><input className="field edit-field" value={selected?.title ?? ""} onChange={event=>updateSelected({title:event.target.value})}/><label>{fa?"نوع صحنه":"Scene type"}</label><input className="field edit-field" value={selected?.kind ?? ""} onChange={event=>updateSelected({kind:event.target.value})}/><label>{fa?"متن گویندگی":"Narration"}</label><textarea className="field edit-field narration-field" value={selected?.narration ?? ""} onChange={event=>updateSelected({narration:event.target.value})} placeholder={fa?"متن گویندگی این صحنه...":"Scene narration..."}/><h3>{fa?"گویندگی این صحنه":"Scene voice-over"}</h3>{selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)}/><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa?"هنوز صدایی برای این صحنه تولید نشده است.":"No generated voice-over for this scene yet."}</p>}<h3>{fa?"رسانه متصل به صحنه":"Scene media"}</h3><select className="field edit-field" value={selected?.assetId ?? ""} onChange={event=>updateSelected({assetId:event.target.value || undefined})}><option value="">{fa?"بدون رسانه":"No media attached"}</option>{assets.filter(asset=>asset.mime_type.startsWith("image/") || asset.mime_type.startsWith("video/")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>{selectedAsset && <p className="muted">{fa?"این رسانه به صحنه انتخاب‌شده متصل و همراه پروژه ذخیره می‌شود.":"This asset reference is saved with the selected scene."}</p>}          <h3>{fa?"دیاگرام قابل ویرایش":"Editable diagram"}</h3>
+          {!selected?.diagram && !sceneSuggestsDiagram(selected) ? <button className="diagram-add" type="button" onClick={resetDiagram}>{fa?"＋ افزودن دیاگرام":"＋ Add diagram"}</button> : <>
           <div className="diagram-tools"><label>{fa?"رنگ تأکیدی":"Accent color"}</label><input aria-label="Diagram accent color" type="color" value={selectedDiagram.accentColor ?? "#7187ff"} onChange={event=>updateDiagram({accentColor:event.target.value})}/><button type="button" onClick={resetDiagram}>{fa?"بازنشانی پیشنهاد":"Reset suggestion"}</button></div>
           {selectedDiagram.nodes.map((node,index)=><div className="diagram-node-editor" key={node.id}>
             <b>{fa?`گره ${index+1}`:`Node ${index+1}`}</b><button type="button" onClick={()=>removeDiagramNode(index)} disabled={selectedDiagram.nodes.length<=2}>×</button>
@@ -422,7 +525,7 @@ export default function App() {
             <div className="diagram-coordinates"><label>X % <input className="field edit-field" type="number" min="5" max="95" value={node.x} onChange={event=>updateDiagramNode(index,{x:Math.max(5,Math.min(95,Number(event.target.value)||5))})}/></label><label>Y % <input className="field edit-field" type="number" min="12" max="82" value={node.y} onChange={event=>updateDiagramNode(index,{y:Math.max(12,Math.min(82,Number(event.target.value)||12))})}/></label></div>
             {index<selectedDiagram.nodes.length-1 && <label>{fa?"برچسب ارتباط":"Connection label"}<input className="field edit-field" value={selectedDiagram.edges[index]?.label ?? ""} onChange={event=>updateDiagramEdge(index,event.target.value)}/></label>}
           </div>)}
-          <button className="diagram-add" type="button" onClick={addDiagramNode}>{fa?"＋ افزودن گره":"＋ Add node"}</button>
+          <button className="diagram-add" type="button" onClick={addDiagramNode}>{fa?"＋ افزودن گره":"＋ Add node"}</button></>}
           <h3>{fa?"بوم چندلایه":"Multi-layer canvas"}</h3>
           <div className="layer-add-grid">
             <button type="button" onClick={()=>addLayer("text")}>＋ {fa?"متن":"Text"}</button>
@@ -442,7 +545,7 @@ export default function App() {
               <label>H % <input className="field edit-field" type="number" min="1" max="100" value={layer.height} onChange={event=>updateLayer(layer.id,{height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label>
             </div>
             <label className="layer-opacity">Opacity · {Math.round(layer.opacity*100)}% <input type="range" min="0" max="100" value={Math.round(layer.opacity*100)} onChange={event=>updateLayer(layer.id,{opacity:Number(event.target.value)/100})}/></label>
-          </div>)}</>:<><h3>{tab==="motion"?"Motion controls":tab==="audio"?"Voice-over settings":"Scene timing"}</h3><p className="muted">{tab==="motion"?"No animation is applied by default. Choose a motion preset explicitly.":tab==="audio"?"Choose a local Piper voice in the script panel and generate narration for every scene.":"Set the duration of the selected scene."}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
+          </div>)}</>:<><h3>{tab==="motion"?(fa?"کنترل حرکت":"Motion controls"):tab==="audio"?(fa?"تنظیمات گویندگی":"Voice-over settings"):(fa?"زمان‌بندی صحنه":"Scene timing")}</h3><p className="muted">{tab==="motion"?(fa?"به‌صورت پیش‌فرض انیمیشنی اعمال نمی‌شود. حرکت را فقط خودت انتخاب کن.":"No animation is applied by default. Choose a motion preset explicitly."):tab==="audio"?(fa?"صدای Piper را در پنل سناریو انتخاب کن و گویندگی صحنه‌ها را بساز.":"Choose a local Piper voice in the script panel and generate narration for every scene."):(fa?"مدت صحنه انتخاب‌شده را تنظیم کن.":"Set the duration of the selected scene.")}</p>{tab==="timing" && <><label>{fa?"مدت صحنه (ثانیه)":"Scene duration (seconds)"}</label><input className="field edit-field" type="number" min="1" max="3600" value={selected?.duration ?? 1} onChange={event=>updateSelected({duration:Math.max(1,Number(event.target.value)||1)})}/></>}</>}
         <div className="note">✧ {fa?"حرکت فقط با انتخاب شما اعمال می‌شود؛ محتوای ثابت بدون زوم و پن می‌ماند.":"Motion is opt-in. Static content never auto-zooms or pans."}</div>
       </aside>
     </main>

@@ -53,19 +53,33 @@ def _split_script(script: str) -> list[str]:
     return groups
 
 
-def _scene_kind(text: str, index: int, total: int) -> str:
+_KIND_LABELS = {
+    "en": {
+        "Hook": "Hook", "Conclusion": "Conclusion", "Code": "Code",
+        "Architecture diagram": "Architecture diagram", "Comparison": "Comparison", "Concept": "Concept",
+    },
+    "fa": {
+        "Hook": "عنوان و شروع", "Conclusion": "جمع‌بندی", "Code": "نمایش کد",
+        "Architecture diagram": "دیاگرام معماری", "Comparison": "مقایسه", "Concept": "مفهوم",
+    },
+}
+
+
+def _scene_kind(text: str, index: int, total: int, language: str) -> str:
     lowered = text.lower()
     if index == 0:
-        return "Hook"
-    if index == total - 1:
-        return "Conclusion"
-    if any(word in lowered for word in ("class ", "public ", "function ", "const ")):
-        return "Code"
-    if any(word in lowered for word in ("architecture", "معماری", "module", "ماژول", "service", "سرویس")):
-        return "Architecture diagram"
-    if any(word in lowered for word in ("versus", " vs ", "مقایسه", "در مقابل")):
-        return "Comparison"
-    return "Concept"
+        key = "Hook"
+    elif index == total - 1:
+        key = "Conclusion"
+    elif any(word in lowered for word in ("class ", "public ", "function ", "const ")):
+        key = "Code"
+    elif any(word in lowered for word in ("architecture", "معماری", "module", "ماژول", "service", "سرویس")):
+        key = "Architecture diagram"
+    elif any(word in lowered for word in ("versus", " vs ", "مقایسه", "در مقابل")):
+        key = "Comparison"
+    else:
+        key = "Concept"
+    return _KIND_LABELS.get(language, _KIND_LABELS["en"])[key]
 
 
 @router.post("/storyboard/from-script", response_model=StoryboardResponse)
@@ -79,7 +93,7 @@ def storyboard_from_script(payload: ScriptRequest) -> StoryboardResponse:
         duration = max(5, round(word_count / payload.words_per_minute * 60))
         scenes.append(SuggestedScene(
             id=str(uuid.uuid4()), title=(paragraph.splitlines()[0][:72] or f"Scene {index + 1}"),
-            kind=_scene_kind(paragraph, index, len(paragraphs)),
+            kind=_scene_kind(paragraph, index, len(paragraphs), payload.language),
             narration=paragraph, duration=duration,
         ))
     return StoryboardResponse(
@@ -106,18 +120,34 @@ def publishing_pack(project_id: str, request: Request) -> dict[str, Any]:
         chapter_title = str(scene.get("title") or "Untitled scene").replace("\n", " ").strip()
         chapters.append(f"{minutes:02}:{seconds:02} {chapter_title}")
         elapsed += duration
-    tags = ["software architecture", "system design", "software engineering", "programming", "developer education"]
-    description = (
-        f"{title}\n\n"
-        "In this lesson, we explore the key ideas, trade-offs, and practical engineering decisions.\n\n"
-        "Chapters:\n" + "\n".join(chapters) +
-        "\n\nSubscribe for more software architecture and engineering lessons."
-    )
+    language = str(document.get("language") or "en")
+    if language == "fa":
+        tags = ["معماری نرم‌افزار", "طراحی سیستم", "مهندسی نرم‌افزار", "برنامه‌نویسی", "آموزش برنامه‌نویسی"]
+        description = (
+            f"{title}\n\n"
+            "در این درس، ایده‌های اصلی، بده‌بستان‌ها و تصمیم‌های عملی مهندسی را مرور می‌کنیم.\n\n"
+            "فصل‌ها:\n" + "\n".join(chapters) +
+            "\n\nبرای درس‌های بعدی معماری نرم‌افزار عضو کانال شو."
+        )
+        title_options = [title, f"{title} | توضیح معماری نرم‌افزار"]
+        thumbnail_brief = f"یک بندانگشتی ۱۶:۹ با کنتراست بالا برای «{title}» بساز. یک تیتر کوتاه و یک تصویر معماری واضح کافی است."
+        disclaimer = "این فقط پیش‌نویس فراداده است. قبل از انتشار، ادعاها، کلیدواژه‌ها و زمان فصل‌ها را بررسی کن."
+    else:
+        tags = ["software architecture", "system design", "software engineering", "programming", "developer education"]
+        description = (
+            f"{title}\n\n"
+            "In this lesson, we explore the key ideas, trade-offs, and practical engineering decisions.\n\n"
+            "Chapters:\n" + "\n".join(chapters) +
+            "\n\nSubscribe for more software architecture and engineering lessons."
+        )
+        title_options = [title, f"{title} | Software Architecture Explained"]
+        thumbnail_brief = f"Create a clean, high-contrast 16:9 thumbnail for: {title}. Use a short headline and one clear architecture visual."
+        disclaimer = "Draft metadata only. Review claims, keywords, and chapter timings before publishing."
     return {
-        "title_options": [title, f"{title} | Software Architecture Explained"],
+        "title_options": title_options,
         "description": description,
         "chapters": chapters,
         "tags": tags,
-        "thumbnail_brief": f"Create a clean, high-contrast 16:9 thumbnail for: {title}. Use a short headline and one clear architecture visual.",
-        "disclaimer": "Draft metadata only. Review claims, keywords, and chapter timings before publishing.",
+        "thumbnail_brief": thumbnail_brief,
+        "disclaimer": disclaimer,
     }

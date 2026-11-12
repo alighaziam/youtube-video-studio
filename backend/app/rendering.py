@@ -270,7 +270,8 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
             accent = "91a4ff"
         boxes = []
         for center_x, center_y in positions:
-            x, y = center_x - node_w // 2, center_y - node_h // 2
+            x = max(0, min(width - node_w, center_x - node_w // 2))
+            y = max(0, min(height - node_h, center_y - node_h // 2))
             boxes.append((x, y))
             filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x{accent}@0.22:t=fill")
             filters.append(f"drawbox=x={x}:y={y}:w={node_w}:h={node_h}:color=0x{accent}@0.95:t=3")
@@ -278,10 +279,13 @@ def _scene_visual_filter(scene: dict[str, Any], width: int, height: int, fps: in
             x1, y1 = positions[index]
             x2, y2 = positions[index + 1]
             left, right = sorted((x1, x2))
-            filters.append(f"drawbox=x={left}:y={y1-2}:w={max(1,right-left)}:h=4:color=0x{accent}@0.85:t=fill")
+            line_y = max(0, min(height - 4, y1 - 2))
+            line_w = max(1, min(width - left, right - left))
+            filters.append(f"drawbox=x={left}:y={line_y}:w={line_w}:h=4:color=0x{accent}@0.85:t=fill")
             if y1 != y2:
                 top, bottom = sorted((y1, y2))
-                filters.append(f"drawbox=x={x2-2}:y={top}:w=4:h={max(1,bottom-top)}:color=0x{accent}@0.85:t=fill")
+                line_x = max(0, min(width - 4, x2 - 2))
+                filters.append(f"drawbox=x={line_x}:y={top}:w=4:h={max(1,min(height - top, bottom - top))}:color=0x{accent}@0.85:t=fill")
     elif visual_type == "code":
         x, y, w, h = int(width * .12), int(height * .2), int(width * .76), int(height * .6)
         filters.append(f"drawbox=x={x}:y={y}:w={w}:h={h}:color=0x0b1220@0.92:t=fill")

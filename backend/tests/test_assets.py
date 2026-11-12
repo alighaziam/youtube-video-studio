@@ -22,7 +22,7 @@ def test_asset_upload_list_and_delete(tmp_path: Path) -> None:
     stored = tmp_path / "media" / asset["relative_path"]
     assert stored.exists()
     assert client.get(f"/api/v1/projects/{project_id}/assets").json()[0]["name"] == "diagram.png"
-    downloaded = client.get(f"/api/v1/projects/{project_id}/assets/{asset[\"id\"]}/file")
+    downloaded = client.get(f"/api/v1/projects/{project_id}/assets/{asset['id']}/file")
     assert downloaded.status_code == 200
     assert downloaded.content == b"fake-png-content"
     assert client.delete(f"/api/v1/projects/{project_id}/assets/{asset['id']}").status_code == 204
