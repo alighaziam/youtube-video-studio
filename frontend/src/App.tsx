@@ -1,84 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { readingDirection } from "./textDirection";
 import { formatTime, projectSrt, sceneSuggestsDiagram, suggestedDiagramLabels, wordCuesForScene, type CaptionCue } from "./timing";
-
-type DiagramNode = { id: string; label: string; x: number; y: number };
-type DiagramEdge = { label: string };
-type SceneDiagram = { nodes: DiagramNode[]; edges: DiagramEdge[]; accentColor?: string };
-type SceneLayer = { id: string; type: "image" | "video" | "text" | "code" | "diagram"; name: string; x: number; y: number; width: number; height: number; zIndex: number; opacity: number; visible: boolean; content?: string; assetId?: string };
-type SceneMotion = "static" | "fade";
-type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string; diagram?: SceneDiagram; layers?: SceneLayer[]; motion?: SceneMotion };
-type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
-type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
-type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
-type CapabilityReport = { ffmpeg_available: boolean; ffprobe_available: boolean; libx264_encoder: boolean; subtitles_filter: boolean };
-type RenderJob = { id: string; project_id?: string; status: string; error?: string | null; width?: number | null; height?: number | null; created_at?: string; duration_seconds?: number | null; progress?: number | null };
-type PublishingPack = { title_options: string[]; description: string; chapters: string[]; tags: string[]; thumbnail_brief: string; disclaimer: string };
-type Workspace = "editor" | "projects" | "templates" | "captions";
-const API = "http://127.0.0.1:8000/api/v1";
-const starterScenes: Scene[] = [
-  { id: "scene-01", title: "Hook — The hidden cost of coupling", kind: "عنوان و شروع", duration: 12, narration: "Coupling hides the real cost until the next change." },
-  { id: "scene-02", title: "Why architecture matters", kind: "مفهوم", duration: 28, narration: "Architecture decides which changes stay cheap." },
-  { id: "scene-03", title: "A modular monolith", kind: "دیاگرام معماری", duration: 35, narration: "A modular monolith keeps one deployment and firm module boundaries." },
-  { id: "scene-04", title: "Module boundaries in code", kind: "نمایش کد", duration: 42, narration: "The code should make an illegal dependency hard to write." },
-  { id: "scene-05", title: "Trade-offs and recap", kind: "جمع‌بندی", duration: 25, narration: "Choose the boundary you can defend six months from now." },
-];
-const makeDefaultDiagram = (scene?: Scene): SceneDiagram => {
-  const labels = suggestedDiagramLabels(scene);
-  return {
-    nodes: labels.map((label, index) => ({ id: `node-${index + 1}`, label, x: Math.round(12 + index * (76 / Math.max(1, labels.length - 1))), y: 48 })),
-    edges: labels.slice(1).map((_, index) => ({ label: ["REQUEST", "ROUTE", "PERSIST"][index % 3] })),
-    accentColor: "#7187ff",
-  };
-};
-const sceneTemplates: { id: string; mark: string; faTitle: string; enTitle: string; faKind: string; enKind: string; duration: number; faNarration: string; enNarration: string; motion?: SceneMotion }[] = [
-  { id: "title", mark: "01", faTitle: "عنوان و شروع", enTitle: "Title and hook", faKind: "عنوان و شروع", enKind: "Title", duration: 10, faNarration: "در چند ثانیه بگو این درس کدام مسئله را حل می‌کند.", enNarration: "State the problem this lesson solves in one breath." },
-  { id: "concept", mark: "02", faTitle: "توضیح مفهوم", enTitle: "Concept", faKind: "مفهوم", enKind: "Concept", duration: 24, faNarration: "مفهوم را با یک مثال کوتاه و قابل تصور توضیح بده.", enNarration: "Explain the idea with one concrete example." },
-  { id: "compare", mark: "03", faTitle: "مقایسه دو راه", enTitle: "Comparison", faKind: "مقایسه", enKind: "Comparison", duration: 28, faNarration: "دو گزینه را کنار هم بگذار و بگو هر کدام چه هزینه‌ای دارد.", enNarration: "Put two options side by side and name the cost of each." },
-  { id: "code", mark: "04", faTitle: "نمایش کد", enTitle: "Code walkthrough", faKind: "نمایش کد", enKind: "Code", duration: 32, faNarration: "فقط همان خطوطی را نشان بده که تصمیم را عوض می‌کنند.", enNarration: "Show only the lines that change the decision." },
-  { id: "architecture", mark: "05", faTitle: "دیاگرام معماری", enTitle: "Architecture diagram", faKind: "دیاگرام معماری", enKind: "Architecture", duration: 30, faNarration: "مرز بین بخش‌ها را ثابت و قابل دفاع نشان بده.", enNarration: "Show the boundary between parts and why it stays put." },
-  { id: "recap", mark: "06", faTitle: "جمع‌بندی", enTitle: "Recap", faKind: "جمع‌بندی", enKind: "Recap", duration: 16, faNarration: "یک جمله بگو که بیننده بتواند فردا به کار ببرد.", enNarration: "Leave the viewer with one decision they can use tomorrow.", motion: "fade" },
-];
-const sceneKinds = {
-  fa: ["عنوان و شروع", "مفهوم", "مقایسه", "نمایش کد", "دیاگرام معماری", "جمع‌بندی"],
-  en: ["Title", "Concept", "Comparison", "Code", "Architecture", "Recap"],
-};
-function outputProfile(document: Project["document"] | undefined): "youtube-1080p" | "shorts-1080p" {
-  const profile = document?.profile as { aspectRatio?: string } | undefined;
-  return profile?.aspectRatio === "9:16" ? "shorts-1080p" : "youtube-1080p";
-}
-function profileDocument(profile: "youtube-1080p" | "shorts-1080p") {
-  return profile === "shorts-1080p"
-    ? { aspectRatio: "9:16", width: 1080, height: 1920, fps: 30 }
-    : { aspectRatio: "16:9", width: 1920, height: 1080, fps: 30 };
-}
-let startupRequest: Promise<{ projects: Project[]; current: Project }> | null = null;
-function loadStartupProject(): Promise<{ projects: Project[]; current: Project }> {
-  if (!startupRequest) {
-    startupRequest = (async () => {
-      const response = await fetch(`${API}/projects`);
-      if (!response.ok) throw new Error("Backend is not reachable. Start the API server first.");
-      let projects: Project[] = await response.json();
-      if (!projects.length) {
-        const created = await fetch(`${API}/projects`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: "Lesson 08 — Modular Monolith in Practice",
-            document: { schemaVersion: 1, profile: { aspectRatio: "16:9", width: 1920, height: 1080, fps: 30 }, language: "fa", scenes: starterScenes, audioTracks: [], captionTracks: [] },
-          }),
-        });
-        if (!created.ok) throw new Error("Could not create the starter project.");
-        projects = [await created.json()];
-      }
-      return { projects, current: projects[0] };
-    })().catch((error: unknown) => {
-      startupRequest = null;
-      throw error;
-    });
-  }
-  return startupRequest;
-}
-
+import type {
+  DiagramNode, DiagramEdge, SceneDiagram, SceneLayer, SceneMotion, Scene,
+  Project, Asset, Voice, CapabilityReport, RenderJob, PublishingPack, Workspace,
+} from "./studio/types";
+import {
+  API, starterScenes, makeDefaultDiagram, sceneTemplates, sceneKinds,
+} from "./studio/defaults";
+import { loadStartupProject, outputProfile, profileDocument } from "./studio/api";
 
 export default function App() {
   const [active, setActive] = useState("scene-03");
