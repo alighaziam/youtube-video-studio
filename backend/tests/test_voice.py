@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -14,13 +15,19 @@ client = TestClient(app)
 def _fake_piper(directory: Path, source: str) -> str:
     """Return a Piper stand-in that subprocess can launch on Windows and Linux."""
     script = directory / "piper.py"
-    script.write_text(source, encoding="utf-8")
+    script.write_text(source, encoding="utf-8", newline="\n")
     if os.name == "nt":
         launcher = directory / "piper.cmd"
         launcher.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
         return str(launcher)
-    script.chmod(0o755)
-    return str(script)
+    launcher = directory / "piper"
+    launcher.write_text(
+        f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(script))} \"$@\"\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    launcher.chmod(0o755)
+    return str(launcher)
 
 
 def test_voice_catalog_lists_installed_local_models(tmp_path: Path) -> None:
