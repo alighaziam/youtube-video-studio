@@ -1,17 +1,17 @@
 import { API, starterScenes } from "./defaults";
 import type { Project } from "./types";
 
-function outputProfile(document: Project["document"] | undefined): "youtube-1080p" | "shorts-1080p" {
+export function outputProfile(document: Project["document"] | undefined): "youtube-1080p" | "shorts-1080p" {
   const profile = document?.profile as { aspectRatio?: string } | undefined;
   return profile?.aspectRatio === "9:16" ? "shorts-1080p" : "youtube-1080p";
 }
-function profileDocument(profile: "youtube-1080p" | "shorts-1080p") {
+export function profileDocument(profile: "youtube-1080p" | "shorts-1080p") {
   return profile === "shorts-1080p"
     ? { aspectRatio: "9:16", width: 1080, height: 1920, fps: 30 }
     : { aspectRatio: "16:9", width: 1920, height: 1080, fps: 30 };
 }
 let startupRequest: Promise<{ projects: Project[]; current: Project }> | null = null;
-function loadStartupProject(): Promise<{ projects: Project[]; current: Project }> {
+export function loadStartupProject(): Promise<{ projects: Project[]; current: Project }> {
   if (!startupRequest) {
     startupRequest = (async () => {
       const response = await fetch(`${API}/projects`);
