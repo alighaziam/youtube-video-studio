@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+MP3_BYTES = b"ID3\x04\x00\x00\x00\x00\x00\x00"
 
 
 def test_project_crud_persists_versioned_document(tmp_path: Path) -> None:
@@ -51,11 +53,11 @@ def test_duplicate_copies_storyboard_and_media(tmp_path: Path) -> None:
     project_id = created.json()["id"]
     image = client.post(
         f"/api/v1/projects/{project_id}/assets",
-        files={"file": ("board.png", b"png-bytes", "image/png")},
+        files={"file": ("board.png", PNG_BYTES, "image/png")},
     ).json()
     voice = client.post(
         f"/api/v1/projects/{project_id}/assets",
-        files={"file": ("take.mp3", b"mp3-bytes", "audio/mpeg")},
+        files={"file": ("take.mp3", MP3_BYTES, "audio/mpeg")},
     ).json()
     saved = client.put(f"/api/v1/projects/{project_id}", json={"document": {"schemaVersion": 1, "scenes": [{
         "id": "scene-1",
@@ -81,6 +83,6 @@ def test_duplicate_copies_storyboard_and_media(tmp_path: Path) -> None:
     original = client.get(f"/api/v1/projects/{project_id}/assets/{image['id']}/file")
     clone = client.get(f"/api/v1/projects/{body['id']}/assets/{scene['assetId']}/file")
     narration = client.get(f"/api/v1/projects/{body['id']}/assets/{scene['voiceAssetId']}/file")
-    assert original.content == clone.content == b"png-bytes"
-    assert narration.content == b"mp3-bytes"
+    assert original.content == clone.content == PNG_BYTES
+    assert narration.content == MP3_BYTES
     assert client.post("/api/v1/projects/missing/duplicate").status_code == 404
