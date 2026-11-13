@@ -19,6 +19,9 @@ services:
       dockerfile: docker/studio.Dockerfile
     init: true
     pull_policy: never
+    environment:
+      STUDIO_MAX_CONCURRENT_RENDERS: ${STUDIO_MAX_CONCURRENT_RENDERS:-1}
+      STUDIO_MAX_PENDING_RENDERS: ${STUDIO_MAX_PENDING_RENDERS:-3}
     ports:
       - "127.0.0.1:8000:8000"
       - "127.0.0.1:5173:5173"

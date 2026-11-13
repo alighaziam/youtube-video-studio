@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -384,6 +385,22 @@ _job_databases: dict[str, str] = {}
 _recovered_queues: set[str] = set()
 
 
+def _positive_int_setting(name: str, default: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return min(max(value, 1), maximum)
+
+
+MAX_CONCURRENT_RENDERS = _positive_int_setting("STUDIO_MAX_CONCURRENT_RENDERS", 1, 4)
+MAX_PENDING_RENDERS = max(
+    MAX_CONCURRENT_RENDERS,
+    _positive_int_setting("STUDIO_MAX_PENDING_RENDERS", 3, 50),
+)
+_RENDER_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_RENDERS)
+
+
 def _ensure_job_table(db: sqlite3.Connection) -> None:
     db.execute(
         """CREATE TABLE IF NOT EXISTS render_jobs (
@@ -416,21 +433,25 @@ def _job_row(job: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _upsert_job(db: sqlite3.Connection, job: dict[str, Any]) -> None:
+    db.execute(
+        """INSERT INTO render_jobs (
+             id, project_id, status, profile, fps, output_path, error,
+             duration_seconds, width, height, created_at, updated_at, progress
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             project_id=excluded.project_id, status=excluded.status, profile=excluded.profile,
+             fps=excluded.fps, output_path=excluded.output_path, error=excluded.error,
+             duration_seconds=excluded.duration_seconds, width=excluded.width, height=excluded.height,
+             progress=excluded.progress, updated_at=excluded.updated_at""",
+        _job_row(job),
+    )
+
+
 def persist_job(db_path: Path | str, job: dict[str, Any]) -> None:
     with sqlite3.connect(db_path) as db:
         _ensure_job_table(db)
-        db.execute(
-            """INSERT INTO render_jobs (
-                 id, project_id, status, profile, fps, output_path, error,
-                 duration_seconds, width, height, created_at, updated_at, progress
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-                 project_id=excluded.project_id, status=excluded.status, profile=excluded.profile,
-                 fps=excluded.fps, output_path=excluded.output_path, error=excluded.error,
-                 duration_seconds=excluded.duration_seconds, width=excluded.width, height=excluded.height,
-                 progress=excluded.progress, updated_at=excluded.updated_at""",
-            _job_row(job),
-        )
+        _upsert_job(db, job)
 
 
 def _load_job(db_path: Path | str, job_id: str) -> dict[str, Any] | None:
@@ -526,7 +547,7 @@ def _set_job(job_id: str, **values: Any) -> None:
         persist_job(db_path, snapshot)
 
 
-def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
+def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
     try:
         if _is_cancelled(job_id):
             _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
@@ -722,12 +743,31 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
         else:
             _set_job(job_id, status="failed", error=str(exc))
 
+def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
+    """Run one render within the process-wide CPU/RAM concurrency budget."""
+    while not _RENDER_SLOTS.acquire(timeout=0.25):
+        if _is_cancelled(job_id):
+            _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
+            with _jobs_lock:
+                _cancelled_jobs.discard(job_id)
+            return
+    try:
+        _render_job(job_id, db_path, output_dir, project_id, profile, fps, assets_dir)
+    finally:
+        _RENDER_SLOTS.release()
+        with _jobs_lock:
+            _cancelled_jobs.discard(job_id)
+
+
 @router.post(
     "/api/v1/projects/{project_id}/renders",
     status_code=202,
     response_model=RenderAccepted,
     summary="Queue an MP4 render",
-    responses={404: {"description": "Project was not found"}},
+    responses={
+        404: {"description": "Project was not found"},
+        429: {"description": "The render queue is full"},
+    },
 )
 def create_render(project_id: str, payload: RenderRequest, background: BackgroundTasks, request: Request) -> RenderAccepted:
     db_path = Path(getattr(request.app.state, "db_path", Path(".data/studio.sqlite3")))
@@ -742,10 +782,23 @@ def create_render(project_id: str, payload: RenderRequest, background: Backgroun
     job = {"id": job_id, "project_id": project_id, "status": "queued", "profile": payload.profile,
            "fps": payload.fps, "created_at": now, "updated_at": now, "output_path": None,
            "error": None, "duration_seconds": None, "width": None, "height": None, "progress": 0}
+    # BEGIN IMMEDIATE serializes concurrent enqueue attempts across API worker processes.
+    with sqlite3.connect(db_path, timeout=30) as db:
+        db.execute("BEGIN IMMEDIATE")
+        _ensure_job_table(db)
+        pending = db.execute(
+            "SELECT COUNT(*) FROM render_jobs WHERE status IN ('queued', 'running')"
+        ).fetchone()[0]
+        if pending >= MAX_PENDING_RENDERS:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Render queue is full ({MAX_PENDING_RENDERS} pending jobs). Try again later.",
+                headers={"Retry-After": "15"},
+            )
+        _upsert_job(db, job)
     with _jobs_lock:
         _jobs[job_id] = job
         _job_databases[job_id] = str(db_path)
-    persist_job(db_path, job)
     output_dir = str(Path(getattr(request.app.state, "render_dir", Path(".data/renders"))))
     background.add_task(_render, job_id, str(db_path), output_dir, project_id, payload.profile, payload.fps, str(Path(getattr(request.app.state, "assets_dir", Path(".data/assets")))))
     return RenderAccepted(job_id=job_id, status="queued")

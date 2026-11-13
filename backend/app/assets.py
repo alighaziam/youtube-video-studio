@@ -19,6 +19,29 @@ ALLOWED_TYPES = {
 MAX_BYTES = 250 * 1024 * 1024
 
 
+def _matches_media_signature(mime: str, header: bytes) -> bool:
+    """Check the container/file signature; never trust the multipart Content-Type alone."""
+    if mime == "image/png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    if mime == "image/jpeg":
+        return header.startswith(b"\xff\xd8\xff")
+    if mime == "image/webp":
+        return len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP"
+    if mime in {"video/mp4", "audio/mp4"}:
+        return len(header) >= 12 and header[4:8] == b"ftyp"
+    if mime == "video/webm":
+        return header.startswith(b"\x1a\x45\xdf\xa3")
+    if mime == "audio/mpeg":
+        return header.startswith(b"ID3") or (
+            len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0
+        )
+    if mime in {"audio/wav", "audio/x-wav"}:
+        return len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WAVE"
+    if mime == "audio/aac":
+        return len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xF6) == 0xF0
+    if mime == "audio/ogg":
+        return header.startswith(b"OggS")
+    return False
 class AssetRecord(BaseModel):
     id: str
     name: str = Field(description="Original file name.")
@@ -80,6 +103,10 @@ async def upload_asset(project_id: str, request: Request, file: UploadFile = Fil
                 output.write(chunk)
         if size == 0:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        with temporary.open("rb") as uploaded:
+            signature = uploaded.read(16)
+        if not _matches_media_signature(mime, signature):
+            raise HTTPException(status_code=415, detail="File content does not match the declared media type")
         temporary.replace(target)
     except Exception:
         temporary.unlink(missing_ok=True)
