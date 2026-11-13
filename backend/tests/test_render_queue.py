@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.rendering as rendering
 from app.rendering import _job_databases, _jobs, list_jobs, persist_job, recover_interrupted_jobs
 
 client = TestClient(app)
@@ -90,3 +91,27 @@ def test_failed_render_retry_starts_a_new_job(tmp_path) -> None:
     assert body["status"] == "queued"
     listed = client.get(f"/api/v1/projects/{project['id']}/renders").json()
     assert any(item["id"] == body["job_id"] for item in listed)
+
+
+
+def test_render_queue_rejects_new_jobs_when_pending_capacity_is_reached(tmp_path, monkeypatch) -> None:
+    app.state.db_path = tmp_path / "bounded-queue.sqlite3"
+    project = client.post("/api/v1/projects", json={
+        "title": "Queue capacity",
+        "document": {"schemaVersion": 1, "scenes": [{"id": "scene-a", "title": "Intro", "duration": 5}]},
+    }).json()
+    monkeypatch.setattr(rendering, "MAX_PENDING_RENDERS", 1)
+    queued = {
+        "id": "already-queued", "project_id": project["id"], "status": "queued",
+        "profile": "youtube-1080p", "fps": 30, "output_path": None, "error": None,
+        "duration_seconds": None, "width": None, "height": None, "progress": 0,
+        "created_at": "2026-11-12T00:00:00+00:00", "updated_at": "2026-11-12T00:00:01+00:00",
+    }
+    persist_job(app.state.db_path, queued)
+
+    response = client.post(f"/api/v1/projects/{project['id']}/renders", json={"profile": "youtube-1080p", "fps": 30})
+
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "15"
+    assert "queue is full" in response.json()["detail"].lower()
+    assert [job["id"] for job in list_jobs(app.state.db_path, project["id"])] == ["already-queued"]
