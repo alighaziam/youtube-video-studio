@@ -22,15 +22,15 @@ MAX_BYTES = 250 * 1024 * 1024
 def _matches_media_signature(mime: str, header: bytes) -> bool:
     """Check the container/file signature; never trust the multipart Content-Type alone."""
     if mime == "image/png":
-        return header.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+        return header.startswith(b"\${token}PNG\${token}\${token}\${token}\${token}")
     if mime == "image/jpeg":
-        return header.startswith(b"\\xff\\xd8\\xff")
+        return header.startswith(b"\${token}\${token}\${token}")
     if mime == "image/webp":
         return len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP"
     if mime in {"video/mp4", "audio/mp4"}:
         return len(header) >= 12 and header[4:8] == b"ftyp"
     if mime == "video/webm":
-        return header.startswith(b"\\x1a\\x45\\xdf\\xa3")
+        return header.startswith(b"\${token}\\x45\${token}\${token}")
     if mime == "audio/mpeg":
         return header.startswith(b"ID3") or (
             len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0
