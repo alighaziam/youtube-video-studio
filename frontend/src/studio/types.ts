@@ -1,0 +1,13 @@
+export type DiagramNode = { id: string; label: string; x: number; y: number };
+export type DiagramEdge = { label: string };
+export type SceneDiagram = { nodes: DiagramNode[]; edges: DiagramEdge[]; accentColor?: string };
+export type SceneLayer = { id: string; type: "image" | "video" | "text" | "code" | "diagram"; name: string; x: number; y: number; width: number; height: number; zIndex: number; opacity: number; visible: boolean; content?: string; assetId?: string };
+export type SceneMotion = "static" | "fade";
+export type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string; diagram?: SceneDiagram; layers?: SceneLayer[]; motion?: SceneMotion };
+export type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
+export type Asset = { id: string; name: string; mime_type: string; size_bytes: number; created_at: string };
+export type Voice = { id: string; name: string; language: string; quality: string; installed: boolean };
+export type CapabilityReport = { ffmpeg_available: boolean; ffprobe_available: boolean; libx264_encoder: boolean; subtitles_filter: boolean };
+export type RenderJob = { id: string; project_id?: string; status: string; error?: string | null; width?: number | null; height?: number | null; created_at?: string; duration_seconds?: number | null; progress?: number | null };
+export type PublishingPack = { title_options: string[]; description: string; chapters: string[]; tags: string[]; thumbnail_brief: string; disclaimer: string };
+export type Workspace = "editor" | "projects" | "templates" | "captions";

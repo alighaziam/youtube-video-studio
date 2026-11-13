@@ -80,3 +80,13 @@ npm --prefix frontend run dev
 Open http://127.0.0.1:5173. Project metadata and the versioned storyboard document are stored in the local SQLite database at `.data/studio.sqlite3`. The current API supports project create/list/read/update/delete. The editor autosaves scene title, type, and duration through the local API. Do not expose the API port to a public network.
 
 See [the roadmap](docs/roadmap.md) for phase gates.
+
+
+### Frontend module boundaries
+
+The React entry component no longer owns shared domain types, starter scene data, editor defaults or startup-project loading. These are isolated under `frontend/src/studio/`:
+- `types.ts`: shared project, scene, asset, voice and render-job contracts.
+- `defaults.ts`: starter scene, templates, diagram defaults and API base.
+- `api.ts`: startup-project loading and output-profile serialization.
+
+The next UI refactor should move editor state into focused hooks and extract timeline, preview, inspector and project-library components without changing the existing editor behavior.
