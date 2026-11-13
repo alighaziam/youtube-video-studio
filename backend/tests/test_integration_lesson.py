@@ -40,7 +40,7 @@ def test_a_lesson_can_be_written_reopened_and_published(tmp_path: Path) -> None:
 
     uploaded = client.post(
         f"/api/v1/projects/{project_id}/assets",
-        files={"file": ("diagram.png", b"\x89PNG\r\n", "image/png")},
+        files={"file": ("diagram.png", b"\x89PNG\r\n\x1a\n", "image/png")},
     )
     assert uploaded.status_code == 201
     scenes[1]["assetId"] = uploaded.json()["id"]
