@@ -748,6 +748,8 @@ def _render(job_id: str, db_path: str, output_dir: str, project_id: str, profile
     while not _RENDER_SLOTS.acquire(timeout=0.25):
         if _is_cancelled(job_id):
             _set_job(job_id, status="cancelled", error="Render was cancelled.", progress=0)
+            with _jobs_lock:
+                _cancelled_jobs.discard(job_id)
             return
     try:
         _render_job(job_id, db_path, output_dir, project_id, profile, fps, assets_dir)
