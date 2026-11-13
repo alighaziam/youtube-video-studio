@@ -1,0 +1,32 @@
+# Up:    docker compose up -d
+# Down:  docker compose down
+#
+# Rebuild, when the local Python image is already present and Docker Hub does not answer:
+#   $env:DOCKER_BUILDKIT='0'; docker compose build
+#
+# Editor  http://127.0.0.1:5173
+# API     http://127.0.0.1:8000
+# Swagger http://127.0.0.1:8000/docs
+#
+# SQLite, uploads, renders, and Piper voices stay in ./.data on this machine.
+# Stop any local API or Vite already using ports 8000 and 5173 before starting.
+
+services:
+  studio:
+    image: framelab:local
+    build:
+      context: .
+      dockerfile: docker/studio.Dockerfile
+    init: true
+    pull_policy: never
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./.data:/app/.data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
