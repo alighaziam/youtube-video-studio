@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { readingDirection } from "./textDirection";
 import { formatTime, projectSrt, sceneSuggestsDiagram, wordCuesForScene } from "./timing";
 import type {
-  DiagramNode, SceneDiagram, SceneLayer, Scene,
+  DiagramNode, SceneDiagram, SceneLayer, Scene, CaptionStyle,
   Project, Asset, Voice, CapabilityReport, RenderJob, PublishingPack, Workspace,
 } from "./studio/types";
 import {
@@ -748,6 +748,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const storedCaptionStyle = project?.document?.captionStyle;
+  const captionStyle: CaptionStyle = storedCaptionStyle === "middle" || storedCaptionStyle === "upper" ? storedCaptionStyle : "lower";
+  const setCaptionStyle = async (next: CaptionStyle) => {
+    if (!project || next === captionStyle) return;
+    const document = { ...project.document, captionStyle: next, scenes };
+    setProject((current) => current ? { ...current, document } : current);
+    const response = await fetch(`${API}/projects/${project.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document }),
+    });
+    if (!response.ok) setError(fa ? "جای زیرنویس ذخیره نشد." : "Could not save the caption placement.");
+  };
   const setOutputProfile = async (next: "youtube-1080p" | "shorts-1080p") => {
     setRenderProfile(next);
     if (!project) return;
@@ -795,7 +807,7 @@ export default function App() {
     <main className={nav === "editor" ? "main" : "main workspace"}>
       {nav === "projects" && <ProjectLibrary fa={fa} projects={projects} project={project} scenes={scenes} openProject={openProject} duplicateProject={duplicateProject} exportProject={exportProject} deleteProject={deleteProject} importProject={importProject} createProject={createProject} />}
       {nav === "templates" && <TemplateLibrary fa={fa} insertTemplate={insertTemplate} />}
-      {nav === "captions" && <CaptionPage fa={fa} scenes={scenes} rememberEdits={rememberEdits} setActive={setActive} setScenes={setScenes} downloadSrt={downloadSrt} />}
+      {nav === "captions" && <CaptionPage fa={fa} scenes={scenes} captionStyle={captionStyle} setCaptionStyle={(style) => { void setCaptionStyle(style); }} rememberEdits={rememberEdits} setActive={setActive} setScenes={setScenes} downloadSrt={downloadSrt} />}
       {nav === "editor" && <section className="scenes">
         <div className="heading"><div><small>STORYBOARD</small><h2>{fa ? "صحنه‌های ویدیو" : "Video scenes"} <em>{String(scenes.length).padStart(2,"0")}</em></h2></div><button onClick={addScene}>＋</button></div>
         <textarea id="script-input" className="script-input" dir="auto" value={scriptText} onChange={event=>setScriptText(event.target.value)} placeholder={fa ? "سناریوی درس را اینجا وارد کن؛ هر پاراگراف یک صحنه می‌شود..." : "Paste your lesson script. Each paragraph becomes a scene..."} />
@@ -835,7 +847,7 @@ export default function App() {
             {previewDiagram && <div className="diagram editor-diagram" style={{"--diagram-accent":previewDiagram.accentColor ?? "#7187ff"} as CSSProperties}>{previewDiagram.nodes.map((node,index)=><div key={node.id} role="button" aria-label={node.label} tabIndex={0} className={index===1?"focus":""} style={{left:`${node.x}%`,top:`${node.y}%`}} onPointerDown={(event) => dragDiagramNode(event, index)}>{node.label}<small>{selected?.kind ?? "Concept"}</small></div>)}</div>}
             <div className="slide-meta footer"><span>LOCAL VIDEO STUDIO</span><span>{selected?.motion === "fade" ? "FADE" : "STATIC"}</span></div>
           </div>}
-          {activeWordIndex >= 0 && <div className="live-caption" dir={readingDirection(captionCues[activeWordIndex]?.text ?? " ")}>{captionCues.slice(Math.max(0, activeWordIndex - 2), activeWordIndex + 4).map((cue) => <em key={cue.id} className={cue.id === captionCues[activeWordIndex].id ? "on" : ""}>{cue.text}</em>)}</div>}
+          {activeWordIndex >= 0 && <div className={`live-caption ${captionStyle}`} dir={readingDirection(captionCues[activeWordIndex]?.text ?? " ")}>{captionCues.slice(Math.max(0, activeWordIndex - 2), activeWordIndex + 4).map((cue) => <em key={cue.id} className={cue.id === captionCues[activeWordIndex].id ? "on" : ""}>{cue.text}</em>)}</div>}
           {safeArea && <div className="safe-area" />}
           {(selected?.layers ?? []).filter(layer=>layer.visible).sort((a,b)=>a.zIndex-b.zIndex).map(layer => {
             const layerAsset = layer.assetId ? assets.find(asset=>asset.id===layer.assetId) : undefined;

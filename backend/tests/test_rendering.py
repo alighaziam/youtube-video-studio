@@ -1,6 +1,6 @@
 import re
 
-from app.rendering import _ass_escape, _ass_time, _build_ass, _bundled_font_files, _motion_suffix, _scene_visual_filter
+from app.rendering import _ass_escape, _ass_time, _build_ass, _bundled_font_files, _caption_placement, _motion_suffix, _scene_visual_filter
 
 
 def test_ass_timestamp_and_text_escaping() -> None:
@@ -45,6 +45,19 @@ def test_scene_visual_templates_are_static_and_kind_specific() -> None:
     assert "zoompan" not in architecture + code + comparison
     assert "crop=1920:1080" in architecture
 
+
+
+def test_caption_style_moves_the_caption_block() -> None:
+    assert _caption_placement(None) == (2, 110)
+    assert _caption_placement("nope") == (2, 110)
+    upper = _build_ass([{"title": "Place", "duration": 2, "narration": "بالا"}], 1920, 1080, "upper")
+    caption = next(line for line in upper.splitlines() if line.startswith("Style: Caption,"))
+    fields = caption.split(",")
+    assert fields[12] == "8"
+    assert fields[15] == "90"
+    middle = _build_ass([{"title": "Place", "duration": 2, "narration": "وسط"}], 1920, 1080, "middle")
+    middle_caption = next(line for line in middle.splitlines() if line.startswith("Style: Caption,"))
+    assert middle_caption.split(",")[12] == "5"
 
 
 def test_caption_timing_uses_generated_voice_duration() -> None:

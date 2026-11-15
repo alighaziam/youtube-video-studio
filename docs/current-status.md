@@ -24,7 +24,7 @@ Updated: 2026-11-12
 - The preview follows the saved scene, but it is not a pixel copy of the FFmpeg frame. Media layers and text overlays are not interleaved in the same z-order in the encoder.
 - Uploaded wav/mp3/m4a/aac/ogg and Piper WAVs can be attached per scene and are mixed into the MP4. The studio does not record the microphone, draw a waveform, trim inside a file, or normalize loudness.
 - The timeline reorders scenes, resizes duration, and shows voice and word lanes. It does not split a clip or snap to a grid.
-- Captions are readable word groups timed from the scene length, or from the probed voice length at render time. There is no phoneme alignment and no separate caption style preset.
+- Captions are readable word groups timed from the scene length, or from the probed voice length at render time. The caption block can sit at the lower edge, the middle, or the upper edge; preview and ASS use that same placement. There is no phoneme alignment.
 - Render jobs are stored in SQLite with progress, cancel, and retry. A restart marks an unfinished job as interrupted. There is no segment checkpoint for a half-rendered scene.
 - Project duplicate copies the storyboard and media files. JSON export/import copies the document only, not the media bytes. There is no brand kit, version history, Whisper adapter, or installer package.
 - Persian glyph shaping still needs a look at the rendered frame on a machine with the font. No pixel-parity claim is made.

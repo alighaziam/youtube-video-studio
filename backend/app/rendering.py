@@ -197,7 +197,18 @@ def _bundled_font_files() -> list[Path]:
     return sorted(path for path in font_dir.glob("*.ttf") if path.is_file())
 
 
-def _build_ass(scenes: list[dict[str, Any]], width: int, height: int) -> str:
+def _caption_placement(value: str | None) -> tuple[int, int]:
+    """ASS alignment and bottom/top margin for the caption block."""
+    placement = str(value or "lower").lower()
+    if placement == "upper":
+        return 8, 90
+    if placement == "middle":
+        return 5, 0
+    return 2, 110
+
+
+def _build_ass(scenes: list[dict[str, Any]], width: int, height: int, caption_style: str = "lower") -> str:
+    caption_alignment, caption_margin = _caption_placement(caption_style)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
@@ -208,7 +219,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Title,Vazirmatn,{int(height * 0.047)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,1,0,1,3,1,8,110,110,90,1
-Style: Caption,Vazirmatn,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,2,130,130,110,1
+Style: Caption,Vazirmatn,{int(height * 0.034)},&H00FFFFFF,&H000000FF,&H00101827,&H90101827,0,0,1,2,1,{caption_alignment},130,130,{caption_margin},1
 Style: Diagram,Vazirmatn,{int(height * 0.024)},&H00E8F0FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,1,5,20,20,20,1
 Style: Edge,Vazirmatn,{int(height * 0.016)},&H00B9C9FF,&H000000FF,&H00101827,&H90101827,1,0,1,1,0,5,10,10,10,1
 Style: LayerText,Vazirmatn,{int(height * 0.034)},&H00F4F6FF,&H000000FF,&H00101827,&H90101827,1,0,1,2,0,5,12,12,12,1
@@ -565,7 +576,9 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
         if row is None:
             raise RuntimeError("Project not found.")
         title, document_json = row
-        scenes = json.loads(document_json).get("scenes") or []
+        document = json.loads(document_json)
+        scenes = document.get("scenes") or []
+        caption_style = str(document.get("captionStyle") or "lower")
         if not scenes:
             raise RuntimeError("Add at least one scene before rendering.")
         width, height = (1080, 1920) if profile == "shorts-1080p" else (1920, 1080)
@@ -686,7 +699,7 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 raise RuntimeError(joined.stderr.strip() or "Could not join rendered scenes.")
             _set_job(job_id, progress=90)
             captions_path = temp_dir / "captions.ass"
-            captions_path.write_text(_build_ass(scenes, width, height), encoding="utf-8")
+            captions_path.write_text(_build_ass(scenes, width, height, caption_style), encoding="utf-8")
             subtitle_filter = f"subtitles={captions_path.name}"
             font_files = _bundled_font_files()
             if font_files:

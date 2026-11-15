@@ -10,4 +10,5 @@ export type Voice = { id: string; name: string; language: string; quality: strin
 export type CapabilityReport = { ffmpeg_available: boolean; ffprobe_available: boolean; libx264_encoder: boolean; subtitles_filter: boolean };
 export type RenderJob = { id: string; project_id?: string; status: string; error?: string | null; width?: number | null; height?: number | null; created_at?: string; duration_seconds?: number | null; progress?: number | null };
 export type PublishingPack = { title_options: string[]; description: string; chapters: string[]; tags: string[]; thumbnail_brief: string; disclaimer: string };
+export type CaptionStyle = "lower" | "middle" | "upper";
 export type Workspace = "editor" | "projects" | "templates" | "captions";

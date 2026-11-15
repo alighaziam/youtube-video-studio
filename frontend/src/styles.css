@@ -90,6 +90,9 @@
 .caption-word.on{background:#6d68c9;color:white}
 .playhead{position:absolute;top:16px;bottom:8px;width:2px;background:#f2f4ff;pointer-events:none}
 .live-caption{position:absolute;left:6%;right:6%;bottom:7%;z-index:30;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border-radius:6px;background:#10182bcc;color:#f4f6ff;font:700 13px/1.4 Vazirmatn,"Segoe UI",Tahoma,sans-serif}
+.live-caption.middle{top:50%;bottom:auto;transform:translateY(-50%)}
+.live-caption.upper{top:8%;bottom:auto}
+.caption-placement{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
 .live-caption em{font-style:normal;opacity:.55}
 .live-caption em.on{opacity:1;color:#d7d4ff}
 .render-queue{margin-top:12px;padding:10px 12px;border:1px solid #2c3a53;border-radius:8px;background:#101a2b;display:grid;gap:6px}

@@ -2,7 +2,7 @@ import { formatTime, projectSrt } from "../timing";
 import { readingDirection } from "../textDirection";
 import { outputProfile } from "./api";
 import { sceneTemplates } from "./defaults";
-import type { Project, Scene } from "./types";
+import type { CaptionStyle, Project, Scene } from "./types";
 
 export function ProjectLibrary({
   fa, projects, project, scenes, openProject, duplicateProject, exportProject, deleteProject, importProject, createProject,
@@ -39,18 +39,26 @@ export function TemplateLibrary({ fa, insertTemplate }: { fa: boolean; insertTem
 }
 
 export function CaptionPage({
-  fa, scenes, rememberEdits, setActive, setScenes, downloadSrt,
+  fa, scenes, captionStyle, setCaptionStyle, rememberEdits, setActive, setScenes, downloadSrt,
 }: {
   fa: boolean;
   scenes: Scene[];
+  captionStyle: CaptionStyle;
+  setCaptionStyle: (style: CaptionStyle) => void;
   rememberEdits: () => void;
   setActive: (id: string) => void;
   setScenes: (update: (items: Scene[]) => Scene[]) => void;
   downloadSrt: () => void;
 }) {
+  const placements: { id: CaptionStyle; label: string }[] = [
+    { id: "lower", label: fa ? "پایین" : "Lower" },
+    { id: "middle", label: fa ? "وسط" : "Middle" },
+    { id: "upper", label: fa ? "بالا" : "Upper" },
+  ];
   return <section className="workspace-page">
     <div className="workspace-head"><div><small>CAPTIONS</small><h2>{fa ? "زیرنویس قابل ویرایش" : "Editable captions"}</h2></div><button className="primary" type="button" onClick={downloadSrt} disabled={!projectSrt(scenes)}>{fa ? "دانلود SRT" : "Download SRT"}</button></div>
-    <p className="lede">{fa ? "هر خط حداکثر دوازده کلمه است و زمانش از مدت صحنه می‌آید. با ویرایش متن، تایم‌لاین و خروجی رندر عوض می‌شود." : "Each line holds at most twelve words and takes its time from the scene duration. Editing the text updates the timeline and the rendered captions."}</p>
+    <p className="lede">{fa ? "هر خط حداکثر دوازده کلمه است و زمانش از مدت صحنه می‌آید. جای بلوک زیرنویس در پیش‌نمایش و فایل ASS یکی است." : "Each line holds at most twelve words and takes its time from the scene duration. The caption block uses the same placement in the preview and the ASS file."}</p>
+    <div className="caption-placement" role="group" aria-label={fa ? "جای زیرنویس" : "Caption placement"}>{placements.map((item) => <button key={item.id} type="button" className={captionStyle === item.id ? "chip on" : "chip"} onClick={() => setCaptionStyle(item.id)}>{item.label}</button>)}</div>
     <div className="caption-list">{scenes.map((scene) => <article className="studio-card" key={scene.id}><header><b dir={readingDirection(scene.title)}>{scene.title}</b><small>{formatTime(scene.duration)}</small></header><textarea className="field edit-field narration-field" dir="auto" value={scene.narration ?? ""} onChange={(event) => { const value = event.target.value; rememberEdits(); setActive(scene.id); setScenes((items) => items.map((item) => item.id === scene.id ? { ...item, narration: value } : item)); }} />{scene.narration?.trim() ? <div className="caption-preview" dir={readingDirection(scene.narration ?? "")}>{scene.narration.trim().split(/\s+/).slice(0, 18).map((word, index) => <em key={`${scene.id}-${index}`}>{word}</em>)}</div> : <p className="muted">{fa ? "برای این صحنه متنی نیست." : "This scene has no narration yet."}</p>}</article>)}</div>
   </section>;
 }
