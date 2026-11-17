@@ -1,6 +1,6 @@
 # Current implementation status
 
-Updated: 2026-11-12
+Updated: 2026-11-17
 
 ## Implemented
 
@@ -16,7 +16,7 @@ Updated: 2026-11-12
 | Publishing pack | Implemented | Draft titles, description, chapters, tags, thumbnail brief, and Markdown download |
 | MP4 rendering | Initial | FFmpeg scene composition for attached images/videos; deterministic semantic diagrams; independent scene layers with position, size, z-order, visibility and opacity; timed overlays, narration mix, 16:9 and 9:16 profiles, ffprobe validation and download |
 | Capability detection | Implemented | FFmpeg, ffprobe, subtitles filter and libx264 checks |
-| CI workflow | Configured | Backend unit, integration, and FFmpeg smoke pytest, plus frontend Vitest and the production build |
+| CI workflow | Verified on main | Main commit `c89fd651` passed on 2026-11-15: backend unit, integration and FFmpeg smoke pytest; frontend Vitest and production build |
 
 ## Known limitations
 
@@ -67,3 +67,10 @@ A phase is not complete merely because files are committed. It needs passing aut
 - Current renderer limitation: media layers preserve their relative z-order, while text/code/diagram layers are emitted in the top overlay plane. Cross-plane interleaving is not yet pixel-identical between preview and export; drag-and-drop transforms are also not implemented (numeric X/Y/size controls are available).
 - A regression test now verifies splitting diagram labels on Unicode arrows, ASCII arrows and pipe separators; 15 renderer tests are defined in the test module, but they have not yet been executed in this environment.
 - Runtime tests and visual QA remain pending; the latest GitHub Actions startup_failure must be resolved before claiming CI success.
+
+## Verification checkpoint (2026-11-17)
+
+- The current `main` commit is `c89fd651`; its GitHub Actions workflow completed successfully on 2026-11-15.
+- This verifies the repository's automated backend, integration, FFmpeg smoke, frontend unit, and production-build gates.
+- It does not replace a local end-to-end run with the user's installed Piper engine/model or manual Persian subtitle inspection on the target operating system and fonts.
+- The preview/renderer layer-order difference and the other limitations above remain open; a green CI run is not a claim of production readiness.
