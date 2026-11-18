@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.captions import CaptionCue, export_caption_text, parse_caption_text
 
 client = TestClient(app)
 
