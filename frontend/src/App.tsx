@@ -49,6 +49,10 @@ export default function App() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetError, setAssetError] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [recordingError, setRecordingError] = useState("");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voiceId, setVoiceId] = useState("");
   const [voiceEngineAvailable, setVoiceEngineAvailable] = useState(false);
@@ -56,6 +60,13 @@ export default function App() {
   const [voiceError, setVoiceError] = useState("");
   const [voiceProgress, setVoiceProgress] = useState("");
   const fa = locale === "fa";
+  useEffect(() => () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+  }, []);
+
   useEffect(() => {
     document.documentElement.lang = fa ? "fa" : "en";
     document.documentElement.dir = fa ? "rtl" : "ltr";
@@ -218,15 +229,15 @@ export default function App() {
     } finally { setVoiceBusy(false); setVoiceProgress(""); }
   };
 
-  const uploadAsset = async (file?: File) => {
-    if (!project || !file) return;
+  const uploadAsset = async (file?: File): Promise<Asset | undefined> => {
+    if (!project || !file) return undefined;
     setAssetBusy(true); setAssetError("");
     try {
       const form = new FormData(); form.append("file", file);
       const response = await fetch(`${API}/projects/${project.id}/assets`, { method: "POST", body: form });
       if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail ?? "Upload failed"); }
-      const item = await response.json(); setAssets(current => [item, ...current]);
-    } catch (reason) { setAssetError(reason instanceof Error ? reason.message : "Upload failed"); }
+      const item = await response.json() as Asset; setAssets(current => [item, ...current]); return item;
+    } catch (reason) { setAssetError(reason instanceof Error ? reason.message : "Upload failed"); return undefined; }
     finally { setAssetBusy(false); }
   };
 
@@ -708,6 +719,64 @@ export default function App() {
     audio.addEventListener("loadedmetadata", () => apply(audio.duration), { once: true });
     audio.addEventListener("error", () => apply(), { once: true });
   };
+  const startVoiceRecording = async () => {
+    if (!selected || recording || assetBusy) return;
+    setRecordingError("");
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setRecordingError(fa ? "ضبط صدا در این مرورگر پشتیبانی نمی‌شود." : "Audio recording is not supported by this browser.");
+      return;
+    }
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferred = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"]
+        .find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
+      const sceneId = selected.id;
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
+      recorder.onerror = () => setRecordingError(fa ? "ضبط صدا با خطا متوقف شد." : "The microphone recording failed.");
+      recorder.onstop = async () => {
+        stream?.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+        if (!chunks.length) {
+          setRecordingError(fa ? "صدایی ضبط نشد." : "No audio was recorded.");
+          return;
+        }
+        const recorderMime = recorder.mimeType.toLowerCase();
+        const mimeType = recorderMime.includes("mp4") ? "audio/mp4" : recorderMime.includes("ogg") ? "audio/ogg" : "audio/webm";
+        const extension = mimeType === "audio/mp4" ? "m4a" : mimeType === "audio/ogg" ? "ogg" : "webm";
+        const blob = new Blob(chunks, { type: mimeType });
+        const file = new File([blob], `recording-${Date.now()}.${extension}`, { type: mimeType });
+        const uploaded = await uploadAsset(file);
+        if (!uploaded) return;
+        const audio = new Audio(assetUrl(uploaded.id));
+        const attach = (duration?: number) => {
+          rememberEdits();
+          setScenes((items) => items.map((scene) => scene.id === sceneId
+            ? { ...scene, voiceAssetId: uploaded.id, ...(duration && Number.isFinite(duration) ? { duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}) }
+            : scene));
+        };
+        audio.addEventListener("loadedmetadata", () => attach(audio.duration), { once: true });
+        audio.addEventListener("error", () => attach(), { once: true });
+      };
+      recorderRef.current = recorder;
+      recordingStreamRef.current = stream;
+      recorder.start(250);
+      setRecording(true);
+    } catch (reason) {
+      stream?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      recorderRef.current = null;
+      setRecording(false);
+      setRecordingError(reason instanceof Error ? reason.message : (fa ? "دسترسی به میکروفون ممکن نیست." : "Could not access the microphone."));
+    }
+  };
+  const stopVoiceRecording = () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  };
   const dragDiagramNode = (event: ReactPointerEvent<HTMLElement>, index: number) => {
     event.preventDefault();
     event.stopPropagation();
@@ -814,6 +883,8 @@ export default function App() {
   };
   const audioAssets = assets.filter((asset) => asset.mime_type.startsWith("audio/"));
   const voicePicker = <>
+    <div className="choice-row"><button type="button" disabled={!selected || recording || assetBusy} onClick={() => void startVoiceRecording()}>{fa ? "● ضبط از میکروفون" : "● Record microphone"}</button><button type="button" disabled={!recording} onClick={stopVoiceRecording}>{fa ? "توقف و ذخیره" : "Stop & save"}</button></div>
+    {recordingError && <p className="media-error">{recordingError}</p>}
     <select className="field edit-field" aria-label={fa ? "صدای صحنه" : "Scene audio"} value={selected?.voiceAssetId ?? ""} onChange={(event) => assignVoice(event.target.value)}>
       <option value="">{fa ? "بدون صدا" : "No audio"}</option>
       {audioAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}

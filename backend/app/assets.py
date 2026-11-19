@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 router = APIRouter(prefix="/api/v1/projects/{project_id}/assets", tags=["assets"])
 ALLOWED_TYPES = {
     "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
-    "video/mp4": ".mp4", "video/webm": ".webm",
+    "video/mp4": ".mp4", "video/webm": ".webm", "audio/webm": ".webm",
     "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/x-wav": ".wav",
     "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/ogg": ".ogg",
 }
@@ -29,7 +29,7 @@ def _matches_media_signature(mime: str, header: bytes) -> bool:
         return len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP"
     if mime in {"video/mp4", "audio/mp4"}:
         return len(header) >= 12 and header[4:8] == b"ftyp"
-    if mime == "video/webm":
+    if mime in {"video/webm", "audio/webm"}:
         return header.startswith(b"\x1a\x45\xdf\xa3")
     if mime == "audio/mpeg":
         return header.startswith(b"ID3") or (
