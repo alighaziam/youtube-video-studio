@@ -13,6 +13,7 @@ import { useSceneHistory } from "./studio/useSceneHistory";
 import { CaptionPage, ProjectLibrary, TemplateLibrary } from "./studio/WorkspacePages";
 import { TimelineBoard } from "./studio/TimelineBoard";
 import { SceneInspector } from "./studio/SceneInspector";
+import { AudioWaveform } from "./studio/AudioWaveform";
 
 export default function App() {
   const [active, setActive] = useState("scene-03");
@@ -714,7 +715,10 @@ export default function App() {
     const audio = new Audio(assetUrl(assetId));
     const apply = (duration?: number) => updateSelected({
       voiceAssetId: assetId,
-      ...(duration && Number.isFinite(duration) ? { duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}),
+      voiceTrimStart: 0,
+      voiceTrimEnd: 0,
+      voiceGain: 1,
+      ...(duration && Number.isFinite(duration) ? { voiceDuration: duration, duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}),
     });
     audio.addEventListener("loadedmetadata", () => apply(audio.duration), { once: true });
     audio.addEventListener("error", () => apply(), { once: true });
@@ -756,7 +760,7 @@ export default function App() {
         const attach = (duration?: number) => {
           rememberEdits();
           setScenes((items) => items.map((scene) => scene.id === sceneId
-            ? { ...scene, voiceAssetId: uploaded.id, ...(duration && Number.isFinite(duration) ? { duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}) }
+            ? { ...scene, voiceAssetId: uploaded.id, voiceTrimStart: 0, voiceTrimEnd: 0, voiceGain: 1, ...(duration && Number.isFinite(duration) ? { voiceDuration: duration, duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}) }
             : scene));
         };
         audio.addEventListener("loadedmetadata", () => attach(audio.duration), { once: true });
@@ -889,7 +893,7 @@ export default function App() {
       <option value="">{fa ? "بدون صدا" : "No audio"}</option>
       {audioAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
     </select>
-    {selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)} /><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa ? "فایل صوتی را از کتابخانه انتخاب کن، یا با Piper برای همهٔ صحنه‌ها بساز." : "Choose an uploaded audio file, or generate narration with Piper."}</p>}
+    {selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)} /><AudioWaveform src={assetUrl(selectedVoiceAsset.id)} /><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa ? "فایل صوتی را از کتابخانه انتخاب کن، یا با Piper برای همهٔ صحنه‌ها بساز." : "Choose an uploaded audio file, or generate narration with Piper."}</p>}
   </>;
 
   return <div className={fa ? "app rtl" : "app ltr"} dir={fa ? "rtl" : "ltr"}>

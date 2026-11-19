@@ -198,3 +198,9 @@ body{font-size:14px;background:#090e1c}
 .project-title,.script-input,.narration-field,.layer-content,.scene-text strong,.hero h1,.hero p,.publish-sheet p,.publish-sheet li,.publish-sheet .title-options button,.caption-preview,.live-caption,.caption-word{unicode-bidi:plaintext;text-align:start}
 .app.rtl .scene-text,.app.rtl .studio-card,.app.rtl .publish-sheet,.app.rtl .inspector{text-align:start}
 .app.ltr .scene-text,.app.ltr .studio-card,.app.ltr .publish-sheet,.app.ltr .inspector{text-align:start}
+
+.audio-waveform{height:54px;display:flex;align-items:center;gap:2px;padding:7px 9px;border:1px solid #2b3852;border-radius:10px;background:#0d1525;overflow:hidden}
+.audio-waveform span{flex:1;min-width:2px;max-width:6px;border-radius:3px;background:#8e87ff;opacity:.9}
+.waveform-message{display:block;color:#92a1bc;font-size:11px;padding:5px 0}
+.audio-processing{display:grid;gap:7px;margin-top:12px;padding:12px;border:1px solid #2b3852;border-radius:12px;background:#10192b}
+.audio-processing input[type=range]{width:100%;accent-color:#8e87ff}
