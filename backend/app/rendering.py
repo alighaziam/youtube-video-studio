@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -392,6 +393,29 @@ def _karaoke_text(chunk: str, seconds: float) -> str:
     return " ".join(parts)
 
 
+def _voice_processing_settings(scene: dict[str, Any], audio_duration: float) -> tuple[float, float, float]:
+    """Return a safe trim start, effective clip duration, and linear gain."""
+    try:
+        total = float(audio_duration)
+    except (TypeError, ValueError):
+        total = 0.1
+    if not math.isfinite(total) or total <= 0:
+        total = 0.1
+
+    def setting(name: str, default: float) -> float:
+        try:
+            value = float(scene.get(name, default))
+        except (TypeError, ValueError):
+            return default
+        return value if math.isfinite(value) else default
+
+    trim_start = min(max(setting("voiceTrimStart", 0.0), 0.0), max(0.0, total - 0.1))
+    trim_end = min(max(setting("voiceTrimEnd", 0.0), 0.0), max(0.0, total - trim_start - 0.1))
+    effective_duration = max(0.1, total - trim_start - trim_end)
+    gain = min(max(setting("voiceGain", 1.0), 0.0), 2.0)
+    return trim_start, effective_duration, gain
+
+
 _job_databases: dict[str, str] = {}
 _recovered_queues: set[str] = set()
 
@@ -587,7 +611,7 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
         safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in title).strip("-")[:48] or "video"
         final_path = target_dir / f"{safe_name}-{job_id[:8]}.mp4"
         media_root = Path(assets_dir or (Path(db_path).parent / "assets")).resolve()
-        voice_inputs: list[tuple[Path, int]] = []
+        voice_inputs: list[tuple[Path, int, float, float, float]] = []
         scene_media: list[Path | None] = []
         scene_layer_media: list[list[tuple[dict[str, Any], Path]]] = []
         elapsed = 0
@@ -623,9 +647,10 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 if probe_audio.returncode != 0:
                     raise RuntimeError(f"Could not inspect voice-over for scene '{scene.get('title', '')}'.")
                 audio_duration = float(json.loads(probe_audio.stdout).get("format", {}).get("duration", 0))
-                scene["captionDuration"] = audio_duration
-                duration = max(duration, int(audio_duration + 0.999))
-                voice_inputs.append((voice_path, elapsed * 1000))
+                trim_start, effective_duration, gain = _voice_processing_settings(scene, audio_duration)
+                scene["captionDuration"] = effective_duration
+                duration = max(duration, int(effective_duration + 0.999))
+                voice_inputs.append((voice_path, elapsed * 1000, trim_start, effective_duration, gain))
             scene["duration"] = duration
             scene_media.append(media_path)
             resolved_layers: list[tuple[dict[str, Any], Path]] = []
@@ -715,9 +740,13 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
             command.extend(["-vf", subtitle_filter])
             if voice_inputs:
                 filters, labels = [], []
-                for index, (_voice_path, delay_ms) in enumerate(voice_inputs, start=1):
+                for index, (_voice_path, delay_ms, trim_start, clip_duration, gain) in enumerate(voice_inputs, start=1):
                     label = f"voice{index}"
-                    filters.append(f"[{index}:a]aresample=48000,adelay={delay_ms}|{delay_ms},apad[{label}]")
+                    filters.append(
+                        f"[{index}:a]atrim=start={trim_start:.3f}:duration={clip_duration:.3f},"
+                        f"asetpts=PTS-STARTPTS,volume={gain:.3f},aresample=48000,"
+                        f"adelay={delay_ms}|{delay_ms},apad[{label}]"
+                    )
                     labels.append(f"[{label}]")
                 filters.append("".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0,alimiter=limit=0.95[aout]")
                 command.extend(["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]", "-c:a", "aac", "-b:a", "192k"])
