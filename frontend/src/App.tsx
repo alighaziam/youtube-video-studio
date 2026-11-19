@@ -15,6 +15,7 @@ import { TimelineBoard } from "./studio/TimelineBoard";
 import { SceneInspector } from "./studio/SceneInspector";
 import { AudioWaveform } from "./studio/AudioWaveform";
 import { splitSceneAt } from "./studio/timeline";
+import { orderPreviewLayers } from "./studio/canvasLayers";
 
 export default function App() {
   const [active, setActive] = useState("scene-03");
@@ -989,7 +990,7 @@ export default function App() {
           </div>}
           {activeWordIndex >= 0 && <div className={`live-caption ${captionStyle}`} dir={readingDirection(captionCues[activeWordIndex]?.text ?? " ")}>{captionCues.slice(Math.max(0, activeWordIndex - 2), activeWordIndex + 4).map((cue) => <em key={cue.id} className={cue.id === captionCues[activeWordIndex].id ? "on" : ""}>{cue.text}</em>)}</div>}
           {safeArea && <div className="safe-area" />}
-          {(selected?.layers ?? []).filter(layer=>layer.visible).sort((a,b)=>a.zIndex-b.zIndex).map(layer => {
+          {orderPreviewLayers(selected?.layers ?? []).map(layer => {
             const layerAsset = layer.assetId ? assets.find(asset=>asset.id===layer.assetId) : undefined;
             return <div key={layer.id} className={layer.id === selectedLayerId ? `canvas-layer layer-${layer.type} selected` : `canvas-layer layer-${layer.type}`} style={{left:`${layer.x}%`,top:`${layer.y}%`,width:`${layer.width}%`,height:`${layer.height}%`,opacity:layer.opacity,zIndex:layer.zIndex}} onPointerDown={(event) => dragLayer(event, layer, "move")}>
               {(layer.type==="image" || layer.type==="video") && layerAsset ? (layer.type==="image" ? <img src={assetUrl(layerAsset.id)} alt={layer.name}/> : <video src={assetUrl(layerAsset.id)} muted playsInline/>) : null}

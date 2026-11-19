@@ -27,7 +27,7 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 - Detect FFmpeg, libass, and H.264 encoder. **Implemented and covered by capability checks.**
 - Render Persian ASS subtitle sample. **Automated CI sample and artifact are available.**
 - Inspect Persian shaping and reading order. **Inspected on the Linux CI artifact with the bundled font.**
-- Compare browser preview and FFmpeg output visually. **Still open: preview/export are not pixel-identical across layer planes.**
+- Match browser preview and FFmpeg layer planes. **Implemented: preview uses media-first, overlay-last ordering like the encoder.** Exact font metrics/video-decoder pixel parity remains a visual QA item.
 - Gate: supported-environment render and Persian shaping are verified; exact preview/export parity remains a follow-up quality gate.
 
 ## Phase 1 — Repository foundation
@@ -42,7 +42,7 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 
 ## Phase 3 — Visual composition
 - Canvas, inspector, text/image/video/code/diagram layers, safe area, undo/redo, and explicit static/fade motion are implemented.
-- Remaining: timeline split/snap, drag-and-drop transforms, shapes/SVG layers, and cross-plane z-order parity between preview and FFmpeg.
+- Remaining: drag-and-drop transforms, shapes/SVG layers, and exact pixel parity for typography/video decoding. Timeline split and one-second snap are implemented.
 - Gate: reusable 5-scene explainer with matching preview/export.
 
 ## Phase 4 — Audio and captions
