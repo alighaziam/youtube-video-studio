@@ -393,7 +393,7 @@ def _karaoke_text(chunk: str, seconds: float) -> str:
     return " ".join(parts)
 
 
-def _voice_processing_settings(scene: dict[str, Any], audio_duration: float) -> tuple[float, float, float]:
+def _voice_processing_settings(scene: dict[str, Any], audio_duration: float) -> tuple[float, float, float, float, float]:
     """Return a safe trim start, effective clip duration, and linear gain."""
     try:
         total = float(audio_duration)
@@ -413,7 +413,9 @@ def _voice_processing_settings(scene: dict[str, Any], audio_duration: float) -> 
     trim_end = min(max(setting("voiceTrimEnd", 0.0), 0.0), max(0.0, total - trim_start - 0.1))
     effective_duration = max(0.1, total - trim_start - trim_end)
     gain = min(max(setting("voiceGain", 1.0), 0.0), 2.0)
-    return trim_start, effective_duration, gain
+    fade_in = min(max(setting("voiceFadeIn", 0.0), 0.0), effective_duration)
+    fade_out = min(max(setting("voiceFadeOut", 0.0), 0.0), max(0.0, effective_duration - fade_in))
+    return trim_start, effective_duration, gain, fade_in, fade_out
 
 
 _job_databases: dict[str, str] = {}
@@ -611,7 +613,7 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
         safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in title).strip("-")[:48] or "video"
         final_path = target_dir / f"{safe_name}-{job_id[:8]}.mp4"
         media_root = Path(assets_dir or (Path(db_path).parent / "assets")).resolve()
-        voice_inputs: list[tuple[Path, int, float, float, float]] = []
+        voice_inputs: list[tuple[Path, int, float, float, float, float, float]] = []
         scene_media: list[Path | None] = []
         scene_layer_media: list[list[tuple[dict[str, Any], Path]]] = []
         elapsed = 0
@@ -647,10 +649,10 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 if probe_audio.returncode != 0:
                     raise RuntimeError(f"Could not inspect voice-over for scene '{scene.get('title', '')}'.")
                 audio_duration = float(json.loads(probe_audio.stdout).get("format", {}).get("duration", 0))
-                trim_start, effective_duration, gain = _voice_processing_settings(scene, audio_duration)
+                trim_start, effective_duration, gain, fade_in, fade_out = _voice_processing_settings(scene, audio_duration)
                 scene["captionDuration"] = effective_duration
                 duration = max(duration, int(effective_duration + 0.999))
-                voice_inputs.append((voice_path, elapsed * 1000, trim_start, effective_duration, gain))
+                voice_inputs.append((voice_path, elapsed * 1000, trim_start, effective_duration, gain, fade_in, fade_out))
             scene["duration"] = duration
             scene_media.append(media_path)
             resolved_layers: list[tuple[dict[str, Any], Path]] = []
@@ -735,18 +737,25 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 subtitle_filter += ":fontsdir=fonts"
             temporary_output = temp_dir / "output.mp4"
             command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(base_video)]
-            for voice_path, _delay, _trim_start, _clip_duration, _gain in voice_inputs:
+            for voice_path, _delay, _trim_start, _clip_duration, _gain, _fade_in, _fade_out in voice_inputs:
                 command.extend(["-i", str(voice_path)])
             command.extend(["-vf", subtitle_filter])
             if voice_inputs:
                 filters, labels = [], []
-                for index, (_voice_path, delay_ms, trim_start, clip_duration, gain) in enumerate(voice_inputs, start=1):
+                for index, (_voice_path, delay_ms, trim_start, clip_duration, gain, fade_in, fade_out) in enumerate(voice_inputs, start=1):
                     label = f"voice{index}"
-                    filters.append(
-                        f"[{index}:a]atrim=start={trim_start:.3f}:duration={clip_duration:.3f},"
-                        f"asetpts=PTS-STARTPTS,volume={gain:.3f},aresample=48000,"
-                        f"adelay={delay_ms}|{delay_ms},apad[{label}]"
-                    )
+                    audio_filters = [
+                        f"atrim=start={trim_start:.3f}:duration={clip_duration:.3f}",
+                        "asetpts=PTS-STARTPTS",
+                        f"volume={gain:.3f}",
+                    ]
+                    if fade_in > 0:
+                        audio_filters.append(f"afade=t=in:st=0:d={fade_in:.3f}")
+                    if fade_out > 0:
+                        fade_start = max(0.0, clip_duration - fade_out)
+                        audio_filters.append(f"afade=t=out:st={fade_start:.3f}:d={fade_out:.3f}")
+                    audio_filters.extend(["aresample=48000", f"adelay={delay_ms}|{delay_ms}", "apad"])
+                    filters.append(f"[{index}:a]" + ",".join(audio_filters) + f"[{label}]")
                     labels.append(f"[{label}]")
                 filters.append("".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0,alimiter=limit=0.95[aout]")
                 command.extend(["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]", "-c:a", "aac", "-b:a", "192k"])
