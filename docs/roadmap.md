@@ -36,9 +36,9 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 - Gate: automated CI is green. Fresh-machine Windows/Linux startup still requires manual validation.
 
 ## Phase 2 — Projects and storyboard
-- Project CRUD, autosave, duplicate, JSON document import/export, and versioned ZIP backup/restore including media are implemented.
+- Project CRUD, autosave, duplicate, JSON document import/export, versioned ZIP backup/restore including media, and named project snapshots with restore/pre-restore safety snapshot (30 retained) are implemented.
 - Scene list, templates, script editor, duration controls, and safe media path handling are implemented.
-- Gate: API tests cover backup/restore round-trip and media reference remapping; manual fresh-install project recovery remains to be checked.
+- Gate: API tests cover backup/restore round-trip, media reference remapping, version snapshot/restore, and history cleanup; manual fresh-install project recovery remains to be checked.
 
 ## Phase 3 — Visual composition
 - Canvas, inspector, text/image/video/code/diagram layers, safe area, undo/redo, and explicit static/fade motion are implemented.
