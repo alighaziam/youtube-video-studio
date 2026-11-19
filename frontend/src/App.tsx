@@ -60,6 +60,13 @@ export default function App() {
   const [voiceError, setVoiceError] = useState("");
   const [voiceProgress, setVoiceProgress] = useState("");
   const fa = locale === "fa";
+  useEffect(() => () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+  }, []);
+
   useEffect(() => {
     document.documentElement.lang = fa ? "fa" : "en";
     document.documentElement.dir = fa ? "rtl" : "ltr";
