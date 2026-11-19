@@ -44,7 +44,7 @@ try {
 finally {
     foreach ($Process in @($Api, $Ui)) {
         if ($null -ne $Process -and -not $Process.HasExited) {
-            Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+            taskkill.exe /PID $Process.Id /T /F | Out-Null
         }
     }
 }
