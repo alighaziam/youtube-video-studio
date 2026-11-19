@@ -12,3 +12,4 @@ export type RenderJob = { id: string; project_id?: string; status: string; error
 export type PublishingPack = { title_options: string[]; description: string; chapters: string[]; tags: string[]; thumbnail_brief: string; disclaimer: string };
 export type CaptionStyle = "lower" | "middle" | "upper";
 export type Workspace = "editor" | "projects" | "templates" | "captions";
+\nexport type ProjectVersion = { id: string; project_id: string; label: string; title: string; scene_count: number; created_at: string };
