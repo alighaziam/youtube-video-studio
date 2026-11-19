@@ -753,6 +753,17 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 else:
                     input_args = ["-stream_loop", "-1", "-i", str(media_path)]
                 layer_inputs = scene_layer_media[index]
+                cache_key = _segment_cache_key(
+                    scenes[index], media_path, layer_inputs, profile, fps, width, height,
+                )
+                checkpoint_dir = target_dir / ".segment-checkpoints"
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                checkpoint = checkpoint_dir / f"{cache_key}.mp4"
+                if _cached_segment_is_valid(checkpoint, ffprobe, width, height, duration):
+                    shutil.copy2(checkpoint, segment)
+                    segment_paths.append(segment)
+                    continue
+                checkpoint.unlink(missing_ok=True)
                 for layer, layer_path in layer_inputs:
                     if layer["type"] == "image":
                         input_args.extend(["-loop", "1", "-framerate", str(fps), "-i", str(layer_path)])
@@ -776,6 +787,11 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 rendered = _run_ffmpeg(job_id, scene_command)
                 if rendered.returncode != 0 or not segment.is_file():
                     raise RuntimeError(rendered.stderr.strip() or f"Could not render scene {index + 1}.")
+                if not _cached_segment_is_valid(segment, ffprobe, width, height, duration):
+                    raise RuntimeError(f"Rendered scene {index + 1} failed checkpoint validation.")
+                temporary_checkpoint = checkpoint_dir / f".{cache_key}.{job_id}.tmp.mp4"
+                shutil.copy2(segment, temporary_checkpoint)
+                os.replace(temporary_checkpoint, checkpoint)
                 segment_paths.append(segment)
             _set_job(job_id, progress=82)
             concat_file = temp_dir / "scenes.txt"
