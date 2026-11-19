@@ -56,6 +56,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Prepare one-command startup dependencies
+        run: |
+          python3 -m venv --system-site-packages .venv
+          python -c "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('backend/requirements.txt').read_bytes()).hexdigest())" > .venv/.requirements.sha256
+          npm ci --prefix frontend --no-audit --no-fund
+          mkdir -p .data
+          python -c "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('frontend/package-lock.json').read_bytes()).hexdigest())" > .data/frontend-package-lock.sha256
       - name: Smoke-test one-command Linux startup
         run: |
           set -euo pipefail
@@ -130,6 +137,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Prepare Windows startup dependencies
+        shell: powershell
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m venv --system-site-packages .venv
+          npm ci --prefix frontend --no-audit --no-fund
+          New-Item -ItemType Directory -Force -Path ".data" | Out-Null
+          (Get-FileHash "backend\\requirements.txt" -Algorithm SHA256).Hash | Set-Content ".venv\\.requirements.sha256" -NoNewline
+          (Get-FileHash "frontend\\package-lock.json" -Algorithm SHA256).Hash | Set-Content ".data\\frontend-package-lock.sha256" -NoNewline
       - name: Smoke-test Windows startup script
         shell: powershell
         run: |
