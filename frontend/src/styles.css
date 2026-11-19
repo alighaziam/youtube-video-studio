@@ -204,3 +204,6 @@ body{font-size:14px;background:#090e1c}
 .waveform-message{display:block;color:#92a1bc;font-size:11px;padding:5px 0}
 .audio-processing{display:grid;gap:7px;margin-top:12px;padding:12px;border:1px solid #2b3852;border-radius:12px;background:#10192b}
 .audio-processing input[type=range]{width:100%;accent-color:#8e87ff}
+
+.split-button{border:1px solid #726be3;background:#28274b;color:#f1efff;border-radius:9px;padding:7px 11px;font:12px inherit;cursor:pointer;white-space:nowrap}
+.split-button:disabled{opacity:.35;cursor:not-allowed}
