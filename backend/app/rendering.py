@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -582,6 +583,68 @@ def _set_job(job_id: str, **values: Any) -> None:
         db_path = _job_databases.get(job_id)
     if db_path:
         persist_job(db_path, snapshot)
+
+
+def _segment_file_identity(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    stat = path.stat()
+    return {"path": str(path.resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def _segment_cache_key(
+    scene: dict[str, Any],
+    media_path: Path | None,
+    layer_inputs: list[tuple[dict[str, Any], Path]],
+    profile: str,
+    fps: int,
+    width: int,
+    height: int,
+) -> str:
+    payload = {
+        "scene": scene,
+        "media": _segment_file_identity(media_path),
+        "layers": [
+            {"layer": layer, "file": _segment_file_identity(path)}
+            for layer, path in layer_inputs
+        ],
+        "profile": profile,
+        "fps": fps,
+        "width": width,
+        "height": height,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _cached_segment_is_valid(
+    path: Path,
+    ffprobe: str,
+    width: int,
+    height: int,
+    expected_duration: float,
+) -> bool:
+    if not path.is_file() or path.stat().st_size <= 1000:
+        return False
+    probe = subprocess.run(
+        [
+            ffprobe, "-v", "error",
+            "-show_entries", "format=duration:stream=codec_type,width,height",
+            "-of", "json", str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return False
+    try:
+        metadata = json.loads(probe.stdout)
+        video = next(stream for stream in metadata.get("streams", []) if stream.get("codec_type") == "video")
+        duration = float(metadata.get("format", {}).get("duration", 0))
+    except (ValueError, TypeError, StopIteration):
+        return False
+    return video.get("width") == width and video.get("height") == height and duration >= max(0.1, expected_duration - 0.2)
 
 
 def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
