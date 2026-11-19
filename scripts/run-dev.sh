@@ -40,7 +40,8 @@ cleanup() {
   [[ -n "$API_PID" ]] && wait "$API_PID" 2>/dev/null || true
   [[ -n "$UI_PID" ]] && wait "$UI_PID" 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM
 
 .venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 &
 API_PID=$!
