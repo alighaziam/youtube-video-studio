@@ -19,17 +19,27 @@ if (( NODE_MAJOR < 20 )); then
   exit 1
 fi
 
+mkdir -p .data
 if [[ ! -x .venv/bin/python ]]; then
   python3 -m venv .venv
 fi
-.venv/bin/python -m pip install -r backend/requirements.txt
-npm --prefix "$ROOT/frontend" ci --no-audit --no-fund
+BACKEND_REQUIREMENTS_HASH="$(python3 -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path("backend/requirements.txt").read_bytes()).hexdigest())')"
+BACKEND_REQUIREMENTS_MARKER=".venv/.requirements.sha256"
+if [[ ! -f "$BACKEND_REQUIREMENTS_MARKER" || "$(cat "$BACKEND_REQUIREMENTS_MARKER")" != "$BACKEND_REQUIREMENTS_HASH" ]]; then
+  .venv/bin/python -m pip install -r backend/requirements.txt
+  printf '%s\n' "$BACKEND_REQUIREMENTS_HASH" > "$BACKEND_REQUIREMENTS_MARKER"
+fi
+FRONTEND_LOCK_HASH="$(python3 -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path("frontend/package-lock.json").read_bytes()).hexdigest())')"
+FRONTEND_LOCK_MARKER=".data/frontend-package-lock.sha256"
+if [[ ! -d frontend/node_modules || ! -f "$FRONTEND_LOCK_MARKER" || "$(cat "$FRONTEND_LOCK_MARKER")" != "$FRONTEND_LOCK_HASH" ]]; then
+  npm --prefix "$ROOT/frontend" ci --no-audit --no-fund
+  printf '%s\n' "$FRONTEND_LOCK_HASH" > "$FRONTEND_LOCK_MARKER"
+fi
 
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
   echo "Warning: FFmpeg/ffprobe is missing; editing works but MP4 rendering will be unavailable." >&2
 fi
 
-mkdir -p .data
 API_PID=""
 UI_PID=""
 cleanup() {
