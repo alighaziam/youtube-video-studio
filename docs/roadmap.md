@@ -48,7 +48,8 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 ## Phase 4 — Audio and captions
 - Audio import, browser microphone recording, local waveform preview, trim start/end, gain, fade-in/out, and per-scene mixing are implemented.
 - SRT/VTT conversion, editable narration, and SRT export are implemented; Persian shaping is checked in the CI artifact.
-- Remaining: phoneme-level caption alignment, optional local Whisper adapter, noise reduction, and loudness normalization.
+- Optional offline faster-whisper transcription and per-scene FFmpeg noise reduction are implemented; both require explicit local configuration.
+- Remaining: phoneme-level caption alignment and loudness normalization.
 - Gate: narration/captions align on representative Persian and English samples in preview and export.
 
 ## Phase 5 — Rendering
