@@ -52,6 +52,43 @@ jobs:
         env:
           PYTHONPATH: backend
         run: python -m pytest backend/tests -q -ra -m smoke
+      - name: Set up Node.js for local startup smoke
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Prepare one-command startup dependencies
+        run: |
+          python3 -m venv --system-site-packages .venv
+          python -c "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('backend/requirements.txt').read_bytes()).hexdigest())" > .venv/.requirements.sha256
+          npm ci --prefix frontend --no-audit --no-fund
+          mkdir -p .data
+          python -c "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('frontend/package-lock.json').read_bytes()).hexdigest())" > .data/frontend-package-lock.sha256
+      - name: Smoke-test one-command Linux startup
+        run: |
+          set -euo pipefail
+          ./scripts/run-dev.sh > /tmp/framelab-dev.log 2>&1 &
+          DEV_PID=$!
+          cleanup() {
+            kill -TERM "$DEV_PID" 2>/dev/null || true
+            wait "$DEV_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          READY=0
+          for _ in $(seq 1 45); do
+            if curl --connect-timeout 1 --max-time 2 -fsS http://127.0.0.1:8000/api/v1/health >/dev/null && curl --connect-timeout 1 --max-time 2 -fsS http://127.0.0.1:5173/ >/dev/null; then
+              READY=1
+              break
+            fi
+            if ! kill -0 "$DEV_PID" 2>/dev/null; then
+              cat /tmp/framelab-dev.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$READY" != "1" ]]; then
+            cat /tmp/framelab-dev.log
+            exit 1
+          fi
       - name: Render Persian subtitle visual sample
         env:
           PYTHONPATH: backend
@@ -84,3 +121,57 @@ jobs:
         run: npm test
       - name: Build frontend
         run: npm run build
+
+  windows-startup:
+    name: Windows one-command startup smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Prepare Windows startup dependencies
+        shell: powershell
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m venv --system-site-packages .venv
+          npm ci --prefix frontend --no-audit --no-fund
+          New-Item -ItemType Directory -Force -Path ".data" | Out-Null
+          (Get-FileHash "backend\\requirements.txt" -Algorithm SHA256).Hash | Set-Content ".venv\\.requirements.sha256" -NoNewline
+          (Get-FileHash "frontend\\package-lock.json" -Algorithm SHA256).Hash | Set-Content ".data\\frontend-package-lock.sha256" -NoNewline
+      - name: Smoke-test Windows startup script
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path ".data" | Out-Null
+          $StartupOut = Join-Path $PWD ".data\startup.stdout.log"
+          $StartupErr = Join-Path $PWD ".data\startup.stderr.log"
+          $Process = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/run-dev.ps1") -PassThru -WindowStyle Hidden -RedirectStandardOutput $StartupOut -RedirectStandardError $StartupErr
+          $Ready = $false
+          try {
+            for ($Index = 0; $Index -lt 240; $Index++) {
+              $Process.Refresh()
+              if ($Process.HasExited) {
+                if (Test-Path $StartupOut) { Get-Content $StartupOut }
+                if (Test-Path $StartupErr) { Get-Content $StartupErr }
+                throw "The Windows startup script exited before the services became ready."
+              }
+              try {
+                $Api = Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/v1/health" -UseBasicParsing -TimeoutSec 2
+                $Ui = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -UseBasicParsing -TimeoutSec 2
+                if ($Api.StatusCode -eq 200 -and $Ui.StatusCode -eq 200) { $Ready = $true; break }
+              } catch { }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $Ready) { throw "The API and editor did not become ready within 240 seconds." }
+          }
+          finally {
+            $Process.Refresh()
+            if (-not $Process.HasExited) { taskkill.exe /PID $Process.Id /T /F | Out-Null }
+          }
