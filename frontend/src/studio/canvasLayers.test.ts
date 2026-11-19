@@ -30,3 +30,18 @@ describe("orderPreviewLayers", () => {
     expect(ordered.map((item) => item.zIndex)).toEqual([1, 2]);
   });
 });
+
+import { transformCanvasLayer } from "./canvasLayers";
+
+describe("transformCanvasLayer", () => {
+  it("keeps moved layers inside the canvas", () => {
+    const moved = transformCanvasLayer(layer("media", "image", 1), -40, 100, "move");
+    expect(moved).toEqual({ x: 0, y: 70, width: 40, height: 30 });
+  });
+
+  it("keeps resized layers inside the canvas and enforces a minimum size", () => {
+    const original = { ...layer("media", "image", 1), x: 20, y: 25, width: 70, height: 60 };
+    const resized = transformCanvasLayer(original, 50, -100, "resize");
+    expect(resized).toEqual({ x: 20, y: 25, width: 80, height: 5 });
+  });
+});
