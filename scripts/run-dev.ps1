@@ -1,5 +1,6 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
+$Frontend = Join-Path $Root "frontend"
 Set-Location $Root
 
 $Python = Get-Command python -ErrorAction SilentlyContinue
@@ -17,8 +18,18 @@ if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     & python -m venv .venv
 }
 & .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-if (-not (Test-Path ".\frontend\node_modules")) {
-    & npm --prefix frontend install
+if ($LASTEXITCODE -ne 0) { throw "Backend dependency installation failed." }
+
+if (-not (Test-Path (Join-Path $Frontend "package-lock.json"))) {
+    throw "frontend/package-lock.json is required for a reproducible startup."
+}
+Push-Location $Frontend
+try {
+    & npm ci --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) { throw "Frontend dependency installation failed." }
+}
+finally {
+    Pop-Location
 }
 
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
@@ -33,8 +44,8 @@ $ApiErr = Join-Path $Root ".data\api.stderr.log"
 $UiOut = Join-Path $Root ".data\vite.stdout.log"
 $UiErr = Join-Path $Root ".data\vite.stderr.log"
 try {
-    $Api = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList @("-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000") -WorkingDirectory $Root -PassThru -NoNewWindow -RedirectStandardOutput $ApiOut -RedirectStandardError $ApiErr
-    $Ui = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "npm --prefix frontend run dev -- --host 127.0.0.1") -WorkingDirectory $Root -PassThru -NoNewWindow -RedirectStandardOutput $UiOut -RedirectStandardError $UiErr
+    $Api = Start-Process -FilePath (Join-Path $Root ".\.venv\Scripts\python.exe") -ArgumentList @("-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000") -WorkingDirectory $Root -PassThru -NoNewWindow -RedirectStandardOutput $ApiOut -RedirectStandardError $ApiErr
+    $Ui = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "npm run dev -- --host 127.0.0.1") -WorkingDirectory $Frontend -PassThru -NoNewWindow -RedirectStandardOutput $UiOut -RedirectStandardError $UiErr
     Write-Host "FrameLab API: http://127.0.0.1:8000"
     Write-Host "FrameLab UI:  http://127.0.0.1:5173"
     Write-Host "Press Ctrl+C to stop both services."
