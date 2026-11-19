@@ -126,3 +126,47 @@ def test_ffmpeg_render_composes_scene_image_and_video_assets(tmp_path: Path) -> 
     ], capture_output=True, text=True, check=True)
     video_stream = next(stream for stream in json.loads(probe.stdout)["streams"] if stream["codec_type"] == "video")
     assert video_stream["width"] == 1920 and video_stream["height"] == 1080
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg is not installed")
+def test_ffmpeg_render_accepts_persian_title_and_narration(tmp_path: Path) -> None:
+    """Exercise the real ASS/libass render path with Persian RTL content."""
+    import subprocess
+
+    db_path = tmp_path / "studio.sqlite3"
+    project_id = str(uuid.uuid4())
+    document = {
+        "scenes": [{
+            "id": "persian-scene",
+            "title": "معماری نرم‌افزار؛ تصمیم‌های درست",
+            "kind": "Architecture diagram",
+            "narration": "معماری نرم‌افزار فقط انتخاب فناوری نیست. هر تصمیم یک بده‌بستان دارد.",
+            "duration": 3,
+        }]
+    }
+    with sqlite3.connect(db_path) as db:
+        db.execute("CREATE TABLE projects (id TEXT PRIMARY KEY, title TEXT, document_json TEXT, created_at TEXT, updated_at TEXT)")
+        db.execute(
+            "INSERT INTO projects VALUES (?, ?, ?, ?, ?)",
+            (project_id, "آزمایش رندر فارسی", json.dumps(document, ensure_ascii=False), "now", "now"),
+        )
+
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"id": job_id, "status": "queued"}
+    _render(job_id, str(db_path), str(tmp_path / "renders"), project_id, "shorts-1080p", 24)
+
+    job = _jobs[job_id]
+    assert job["status"] == "completed", job.get("error")
+    output = Path(job["output_path"])
+    assert output.is_file() and output.stat().st_size > 1000
+    assert job["width"] == 1080 and job["height"] == 1920
+
+    probe = subprocess.run([
+        shutil.which("ffprobe"), "-v", "error",
+        "-show_entries", "format=duration:stream=codec_type,width,height",
+        "-of", "json", str(output),
+    ], capture_output=True, text=True, check=True)
+    metadata = json.loads(probe.stdout)
+    video = next(stream for stream in metadata["streams"] if stream["codec_type"] == "video")
+    assert video["width"] == 1080 and video["height"] == 1920
+    assert float(metadata["format"]["duration"]) >= 2.9
