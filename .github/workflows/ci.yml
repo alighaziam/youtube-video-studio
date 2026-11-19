@@ -52,6 +52,36 @@ jobs:
         env:
           PYTHONPATH: backend
         run: python -m pytest backend/tests -q -ra -m smoke
+      - name: Set up Node.js for local startup smoke
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Smoke-test one-command Linux startup
+        run: |
+          set -euo pipefail
+          ./scripts/run-dev.sh > /tmp/framelab-dev.log 2>&1 &
+          DEV_PID=$!
+          cleanup() {
+            kill -INT "$DEV_PID" 2>/dev/null || true
+            wait "$DEV_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          READY=0
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health >/dev/null && curl -fsS http://127.0.0.1:5173/ >/dev/null; then
+              READY=1
+              break
+            fi
+            if ! kill -0 "$DEV_PID" 2>/dev/null; then
+              cat /tmp/framelab-dev.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "$READY" != "1" ]]; then
+            cat /tmp/framelab-dev.log
+            exit 1
+          fi
       - name: Render Persian subtitle visual sample
         env:
           PYTHONPATH: backend
@@ -84,3 +114,41 @@ jobs:
         run: npm test
       - name: Build frontend
         run: npm run build
+
+  windows-startup:
+    name: Windows one-command startup smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Smoke-test Windows startup script
+        shell: powershell
+        run: |
+          $Process = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/run-dev.ps1") -PassThru -WindowStyle Hidden
+          $Ready = $false
+          try {
+            for ($Index = 0; $Index -lt 240; $Index++) {
+              $Process.Refresh()
+              if ($Process.HasExited) { throw "The Windows startup script exited before the services became ready." }
+              try {
+                $Api = Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/v1/health" -UseBasicParsing -TimeoutSec 2
+                $Ui = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -UseBasicParsing -TimeoutSec 2
+                if ($Api.StatusCode -eq 200 -and $Ui.StatusCode -eq 200) { $Ready = $true; break }
+              } catch { }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $Ready) { throw "The API and editor did not become ready within 240 seconds." }
+          }
+          finally {
+            $Process.Refresh()
+            if (-not $Process.HasExited) { taskkill.exe /PID $Process.Id /T /F | Out-Null }
+          }
