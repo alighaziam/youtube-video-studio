@@ -55,7 +55,7 @@ The editor can generate per-scene narration locally with Piper, list installed v
 
 The current vertical slice includes editable storyboard scenes, SQLite persistence, a local media library, browser microphone recording, per-scene audio waveform preview and trim/gain/fade processing, optional Piper narration, editable captions, a versioned ZIP backup/restore that includes source media, and FFmpeg rendering in 16:9 and 9:16 profiles. Persian subtitle shaping was visually inspected from a reproducible Linux CI render artifact. Rendered scene segments are cached by content fingerprint and validated with ffprobe before reuse.
 
-This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes pixel-level preview/export parity for cross-plane layer z-order, timeline split and snap, precise phoneme alignment, a brand kit and version history, optional local speech-to-text/noise-reduction adapters, and release packaging plus fresh-machine validation on both operating systems. Publishing output remains a draft; nothing is uploaded automatically.
+This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes exact pixel-level parity for typography/video decoding, drag-and-drop transforms, shape/SVG layers, precise phoneme alignment, a brand kit and version history, optional local speech-to-text/noise-reduction adapters, and release packaging plus fresh-machine validation on both operating systems. Publishing output remains a draft; nothing is uploaded automatically.
 
 ## Run locally
 
