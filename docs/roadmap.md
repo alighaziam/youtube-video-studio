@@ -1,4 +1,4 @@
-# Current implementation checkpoint — 11 November 2026
+# Current implementation checkpoint — 19 November 2026
 
 The repository has a working vertical slice in source: project/storyboard persistence, local media library, optional Piper voice generation, FFmpeg scene rendering, captions, 16:9/9:16 profiles, output probing, and publishing-pack export. The one-action script-to-MP4 path is available when Piper and a licensed voice model are installed locally.
 
@@ -7,12 +7,15 @@ Recent hardening:
 - Multi-scene Piper generation now rolls back WAV files and database asset records if any later scene fails; a regression test covers this failure path.
 - FFmpeg subtitle filter argument no longer includes an empty trailing option separator, preventing a malformed filter expression during final muxing.
 
-Not yet verified in this environment:
-- Clean local install and actual Piper model execution on the user's machine.
-- End-to-end MP4 generation and manual Persian subtitle inspection.
-- GitHub Actions result for the latest commits. Empty/unavailable status data must not be treated as a passing build.
+Verified in the repository on 19 November 2026:
+- GitHub Actions passes backend unit/integration tests, FFmpeg smoke renders, frontend tests/build, and CodeQL.
+- A reproducible Persian Shorts MP4 and frame are generated as a CI artifact; Persian title/subtitle shaping and reading order were visually inspected.
+- Audio trim/gain/fade, browser WebM recording upload, media-inclusive project backup/restore, and scene checkpoint reuse have regression coverage.
 
-Next work should continue on testable repository improvements while local-only checks are blocked. Do not mark a roadmap phase complete until its exit gate is demonstrated.
+Still requiring target-machine validation:
+- Clean Windows and Linux installs and actual Piper model execution with the selected licensed voice model.
+- Preview/FFmpeg pixel parity and cross-plane layer ordering.
+- Do not mark a roadmap phase complete until its exit gate is demonstrated.
 
 ---
 
@@ -21,44 +24,38 @@ Next work should continue on testable repository improvements while local-only c
 Each phase has an exit gate. Do not start the next phase until current tests and a reproducible demo pass.
 
 ## Phase 0 — Environment and rendering spike
-- Detect FFmpeg, libass, and H.264 encoder.
-- Render Persian ASS subtitle sample.
-- Compare browser preview and FFmpeg output visually.
-- Record OS, FFmpeg version, font, command, output metadata, and known differences.
-- Gate: successful render on a supported environment and manual Persian shaping inspection.
+- Detect FFmpeg, libass, and H.264 encoder. **Implemented and covered by capability checks.**
+- Render Persian ASS subtitle sample. **Automated CI sample and artifact are available.**
+- Inspect Persian shaping and reading order. **Inspected on the Linux CI artifact with the bundled font.**
+- Compare browser preview and FFmpeg output visually. **Still open: preview/export are not pixel-identical across layer planes.**
+- Gate: supported-environment render and Persian shaping are verified; exact preview/export parity remains a follow-up quality gate.
 
 ## Phase 1 — Repository foundation
-- Monorepo structure for frontend, backend, shared schemas, scripts, docs.
-- FastAPI health and capability endpoints.
-- React shell with Persian RTL / English LTR switch.
-- SQLite + Alembic initial migration.
-- CI for Python and frontend checks.
-- Gate: one-command local startup and passing CI.
+- Monorepo structure, FastAPI health/capability endpoints, React RTL/LTR shell, SQLite persistence, and CI are implemented.
+- One-command Linux and Windows startup scripts are included; shell syntax is checked in CI.
+- Gate: automated CI is green. Fresh-machine Windows/Linux startup still requires manual validation.
 
 ## Phase 2 — Projects and storyboard
-- Project CRUD, autosave, recovery, versioned JSON.
-- Scene list, scene templates, script editor, duration controls.
-- Local asset import and safe path management.
-- Gate: create and reopen a multi-scene project without data loss.
+- Project CRUD, autosave, duplicate, JSON document import/export, and versioned ZIP backup/restore including media are implemented.
+- Scene list, templates, script editor, duration controls, and safe media path handling are implemented.
+- Gate: API tests cover backup/restore round-trip and media reference remapping; manual fresh-install project recovery remains to be checked.
 
 ## Phase 3 — Visual composition
-- Canvas, layer selection, inspector, text/image/shape/code/SVG diagram layers.
-- Safe areas, alignment guides, undo/redo.
-- Explicit motion presets; static default.
-- Gate: edit and preview reusable 5-scene explainer.
+- Canvas, inspector, text/image/video/code/diagram layers, safe area, undo/redo, and explicit static/fade motion are implemented.
+- Remaining: timeline split/snap, drag-and-drop transforms, shapes/SVG layers, and cross-plane z-order parity between preview and FFmpeg.
+- Gate: reusable 5-scene explainer with matching preview/export.
 
 ## Phase 4 — Audio and captions
-- Audio import and browser recording.
-- Clip trim/gain/fade and waveform.
-- SRT/VTT editing and export; Persian RTL checks.
-- Optional Whisper/Piper adapters and noise reduction capability detection.
-- Gate: narration and captions align in preview and export.
+- Audio import, browser microphone recording, local waveform preview, trim start/end, gain, fade-in/out, and per-scene mixing are implemented.
+- SRT/VTT conversion, editable narration, and SRT export are implemented; Persian shaping is checked in the CI artifact.
+- Remaining: phoneme-level caption alignment, optional local Whisper adapter, noise reduction, and loudness normalization.
+- Gate: narration/captions align on representative Persian and English samples in preview and export.
 
 ## Phase 5 — Rendering
-- FFmpeg render graph, profiles, queue, SSE progress, cancel.
-- Segment checkpoints and output validation.
-- 16:9 and 9:16 H.264/AAC profiles.
-- Gate: reproducible MP4 from project fixture and successful media probe.
+- FFmpeg render graph, 16:9/9:16 H.264/AAC profiles, bounded queue, progress, cancel/retry, and ffprobe output validation are implemented.
+- Content-addressed scene checkpoints are persisted and reused only after ffprobe validation.
+- Progress currently uses polling rather than SSE.
+- Gate: reproducible MP4 fixtures and segment reuse tests pass in CI.
 
 ## Phase 6 — Publishing toolkit
 - Title, description, chapters, tags, thumbnail brief.
@@ -67,10 +64,9 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 - Gate: editable publishing pack for one sample lesson.
 
 ## Phase 7 — Hardening
-- Windows/Linux setup scripts and troubleshooting.
-- Accessibility, performance, backup/restore, security review.
-- End-to-end test project and release packaging.
-- Gate: fresh-machine installation guide validated by clean setup.
+- Windows/Linux setup and one-command launch scripts, troubleshooting docs, media-inclusive backup/restore, path validation, and CodeQL checks are implemented.
+- Remaining: fresh-machine validation on both OSes, accessibility/performance pass, storage cleanup/retention policy for cached segments, and release packaging.
+- Gate: clean setup on Windows and Linux plus an end-to-end sample project.
 
 ## Definition of done
 A feature is complete only when implementation, automated tests, user-facing documentation, and a reproducible manual check exist. A commit alone does not mean a phase is complete.
