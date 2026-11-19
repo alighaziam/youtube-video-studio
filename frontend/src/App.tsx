@@ -15,7 +15,7 @@ import { TimelineBoard } from "./studio/TimelineBoard";
 import { SceneInspector } from "./studio/SceneInspector";
 import { AudioWaveform } from "./studio/AudioWaveform";
 import { splitSceneAt } from "./studio/timeline";
-import { orderPreviewLayers } from "./studio/canvasLayers";
+import { orderPreviewLayers, transformCanvasLayer } from "./studio/canvasLayers";
 
 export default function App() {
   const [active, setActive] = useState("scene-03");
@@ -923,19 +923,22 @@ export default function App() {
     setSelectedLayerId(layer.id);
     const startX = event.clientX;
     const startY = event.clientY;
-    const origin = { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
+    const origin = { ...layer };
     const move = (ev: PointerEvent) => {
       const dx = ((ev.clientX - startX) / bounds.width) * 100;
       const dy = ((ev.clientY - startY) / bounds.height) * 100;
-      if (mode === "move") updateLayer(layer.id, { x: origin.x + dx, y: origin.y + dy });
-      else updateLayer(layer.id, { width: origin.width + dx, height: origin.height + dy });
+      updateLayer(layer.id, transformCanvasLayer(origin, dx, dy, mode));
     };
     const stop = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      window.removeEventListener("blur", stop);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    window.addEventListener("blur", stop);
   };
 
   useEffect(() => {
