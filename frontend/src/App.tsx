@@ -797,6 +797,7 @@ export default function App() {
       voiceGain: 1,
       voiceFadeIn: 0,
       voiceFadeOut: 0,
+      voiceNoiseReduction: false,
       ...(duration && Number.isFinite(duration) ? { voiceDuration: duration, duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}),
     });
     audio.addEventListener("loadedmetadata", () => apply(audio.duration), { once: true });
@@ -839,7 +840,8 @@ export default function App() {
         const attach = (duration?: number) => {
           rememberEdits();
           setScenes((items) => items.map((scene) => scene.id === sceneId
-            ? { ...scene, voiceAssetId: uploaded.id, voiceTrimStart: 0, voiceTrimEnd: 0, voiceGain: 1, voiceFadeIn: 0, voiceFadeOut: 0, ...(duration && Number.isFinite(duration) ? { voiceDuration: duration, duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}) }
+            ? { ...scene, voiceAssetId: uploaded.id, voiceTrimStart: 0, voiceTrimEnd: 0, voiceGain: 1, voiceFadeIn: 0, voiceFadeOut: 0,
+      voiceNoiseReduction: false, ...(duration && Number.isFinite(duration) ? { voiceDuration: duration, duration: Math.max(1, Math.min(3600, Math.ceil(duration))) } : {}) }
             : scene));
         };
         audio.addEventListener("loadedmetadata", () => attach(audio.duration), { once: true });
