@@ -23,11 +23,11 @@ export function splitSceneAt(
   };
   const second: Scene = {
     ...scene,
-    id: \`scene-\${crypto.randomUUID()}\`,
+    id: `scene-${crypto.randomUUID()}`,
     title: secondTitle,
     duration: scene.duration - split,
     narration: secondNarration,
-    layers: scene.layers?.map((layer) => ({ ...layer, id: \`layer-\${crypto.randomUUID()}\` })),
+    layers: scene.layers?.map((layer) => ({ ...layer, id: `layer-${crypto.randomUUID()}` })),
     diagram: scene.diagram ? {
       ...scene.diagram,
       nodes: scene.diagram.nodes.map((node) => ({ ...node })),
