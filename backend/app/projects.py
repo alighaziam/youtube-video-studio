@@ -297,17 +297,26 @@ def _remove_backup(path: str) -> None:
 
 @router.get("/{project_id}/backup", summary="Export a complete project backup")
 def export_project_backup(project_id: str, request: Request) -> FileResponse:
+    try:
+        safe_project_id = str(uuid.UUID(project_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid project identifier") from None
+    if safe_project_id != project_id.lower():
+        raise HTTPException(status_code=400, detail="Invalid project identifier")
+
     base_dir = _assets_root(request)
-    project_dir = (base_dir / project_id).resolve()
+    project_dir = (base_dir / safe_project_id).resolve()
+    if project_dir.parent != base_dir:
+        raise HTTPException(status_code=400, detail="Invalid project asset path")
     with _connect(request) as db:
-        row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        row = db.execute("SELECT * FROM projects WHERE id = ?", (safe_project_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Project not found")
         _ensure_assets(db)
         assets = db.execute(
             "SELECT id, original_name, mime_type, relative_path, size_bytes "
             "FROM assets WHERE project_id = ? ORDER BY created_at",
-            (project_id,),
+            (safe_project_id,),
         ).fetchall()
 
     if len(assets) > MAX_BACKUP_ASSETS:
