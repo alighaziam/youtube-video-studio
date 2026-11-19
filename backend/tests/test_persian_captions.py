@@ -18,7 +18,7 @@ def test_persian_and_mixed_script_captions_preserve_words_and_karaoke_timing() -
     for expected in ("معماری", "نرم‌افزار", "تصمیم‌های", "درست", "API", "Database", "قرارداد"):
         assert expected in caption_text
 
-    karaoke_beats = [int(value) for value in re.findall(r"\\\\k(\\d+)", caption_text)]
+    karaoke_beats = [int(value) for value in re.findall(r"\\k(\d+)", caption_text)]
     assert len(karaoke_beats) == len(narration.split())
     assert all(beat > 0 for beat in karaoke_beats)
     assert sum(karaoke_beats) == 800
