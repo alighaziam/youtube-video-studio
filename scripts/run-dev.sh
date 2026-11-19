@@ -53,7 +53,7 @@ trap 'cleanup; exit 130' INT TERM
 
 .venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 &
 API_PID=$!
-(cd "$ROOT/frontend" && npm run dev -- --host 127.0.0.1) &
+(cd "$ROOT/frontend" && exec ./node_modules/.bin/vite --host 127.0.0.1) &
 UI_PID=$!
 
 echo "FrameLab API: http://127.0.0.1:8000"
