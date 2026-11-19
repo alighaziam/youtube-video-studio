@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -584,6 +585,68 @@ def _set_job(job_id: str, **values: Any) -> None:
         persist_job(db_path, snapshot)
 
 
+def _segment_file_identity(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    stat = path.stat()
+    return {"path": str(path.resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def _segment_cache_key(
+    scene: dict[str, Any],
+    media_path: Path | None,
+    layer_inputs: list[tuple[dict[str, Any], Path]],
+    profile: str,
+    fps: int,
+    width: int,
+    height: int,
+) -> str:
+    payload = {
+        "scene": scene,
+        "media": _segment_file_identity(media_path),
+        "layers": [
+            {"layer": layer, "file": _segment_file_identity(path)}
+            for layer, path in layer_inputs
+        ],
+        "profile": profile,
+        "fps": fps,
+        "width": width,
+        "height": height,
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _cached_segment_is_valid(
+    path: Path,
+    ffprobe: str,
+    width: int,
+    height: int,
+    expected_duration: float,
+) -> bool:
+    if not path.is_file() or path.stat().st_size <= 1000:
+        return False
+    probe = subprocess.run(
+        [
+            ffprobe, "-v", "error",
+            "-show_entries", "format=duration:stream=codec_type,width,height",
+            "-of", "json", str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return False
+    try:
+        metadata = json.loads(probe.stdout)
+        video = next(stream for stream in metadata.get("streams", []) if stream.get("codec_type") == "video")
+        duration = float(metadata.get("format", {}).get("duration", 0))
+    except (ValueError, TypeError, StopIteration):
+        return False
+    return video.get("width") == width and video.get("height") == height and duration >= max(0.1, expected_duration - 0.2)
+
+
 def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, profile: str, fps: int, assets_dir: str | None = None) -> None:
     try:
         if _is_cancelled(job_id):
@@ -690,6 +753,17 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 else:
                     input_args = ["-stream_loop", "-1", "-i", str(media_path)]
                 layer_inputs = scene_layer_media[index]
+                cache_key = _segment_cache_key(
+                    scenes[index], media_path, layer_inputs, profile, fps, width, height,
+                )
+                checkpoint_dir = target_dir / ".segment-checkpoints"
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                checkpoint = checkpoint_dir / f"{cache_key}.mp4"
+                if _cached_segment_is_valid(checkpoint, ffprobe, width, height, duration):
+                    shutil.copy2(checkpoint, segment)
+                    segment_paths.append(segment)
+                    continue
+                checkpoint.unlink(missing_ok=True)
                 for layer, layer_path in layer_inputs:
                     if layer["type"] == "image":
                         input_args.extend(["-loop", "1", "-framerate", str(fps), "-i", str(layer_path)])
@@ -713,6 +787,11 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 rendered = _run_ffmpeg(job_id, scene_command)
                 if rendered.returncode != 0 or not segment.is_file():
                     raise RuntimeError(rendered.stderr.strip() or f"Could not render scene {index + 1}.")
+                if not _cached_segment_is_valid(segment, ffprobe, width, height, duration):
+                    raise RuntimeError(f"Rendered scene {index + 1} failed checkpoint validation.")
+                temporary_checkpoint = checkpoint_dir / f".{cache_key}.{job_id}.tmp.mp4"
+                shutil.copy2(segment, temporary_checkpoint)
+                os.replace(temporary_checkpoint, checkpoint)
                 segment_paths.append(segment)
             _set_job(job_id, progress=82)
             concat_file = temp_dir / "scenes.txt"
