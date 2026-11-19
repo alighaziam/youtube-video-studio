@@ -55,7 +55,7 @@ A phase is not complete merely because files are committed. It needs passing aut
 - The inspector supports editing node text, moving nodes numerically, changing connection labels and accent color, adding/removing nodes, and resetting to the suggested semantic diagram.
 - The editor preview reads the same saved scene diagram model. The FFmpeg renderer consumes that model for node positions, labels, connectors and accent color.
 - Custom diagram data is bounded and sanitized on the rendering side (maximum 12 nodes, bounded coordinates and validated hex color). The feature remains static: no automatic zoom or pan.
-- Automated tests were added for custom diagram labels, positions, edge text and color. Runtime execution and visual QA remain pending while GitHub Actions startup failures persist.
+- Automated tests cover custom diagram labels, positions, edge text and color. The renderer smoke suite runs in GitHub Actions; OS-specific visual review remains a separate gate.
 
 
 ## Multi-layer canvas (2026-11-10)
@@ -65,8 +65,8 @@ A phase is not complete merely because files are committed. It needs passing aut
 - Layer transforms are percentage-based and are intended to remain stable across 16:9 and 9:16 output profiles. The canvas is static; there is no automatic zoom or pan.
 - Frontend preview supports the layer stack. FFmpeg rendering normalizes layer metadata, draws visible text/code/diagram layers as timed ASS overlays, and composites image/video layers with scaled, opacity-aware overlays in z-order. The output remains static apart from intentionally supplied video media.
 - Current renderer limitation: media layers preserve their relative z-order, while text/code/diagram layers are emitted in the top overlay plane. Cross-plane interleaving is not yet pixel-identical between preview and export; drag-and-drop transforms are also not implemented (numeric X/Y/size controls are available).
-- A regression test now verifies splitting diagram labels on Unicode arrows, ASCII arrows and pipe separators; 15 renderer tests are defined in the test module, but they have not yet been executed in this environment.
-- Runtime tests and visual QA remain pending; the latest GitHub Actions startup_failure must be resolved before claiming CI success.
+- Regression coverage verifies diagram label splitting, custom geometry, multi-layer composition, and media validation. These tests execute in the current GitHub Actions workflow.
+- The remaining visual limitation is cross-plane z-order parity: text/code/diagram overlays are still rendered in a top plane rather than interleaved with media layers.
 
 ## Verification checkpoint (2026-11-17)
 
