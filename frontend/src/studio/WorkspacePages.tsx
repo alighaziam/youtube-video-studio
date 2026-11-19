@@ -5,7 +5,7 @@ import { sceneTemplates } from "./defaults";
 import type { CaptionStyle, Project, Scene } from "./types";
 
 export function ProjectLibrary({
-  fa, projects, project, scenes, openProject, duplicateProject, exportProject, deleteProject, importProject, createProject,
+  fa, projects, project, scenes, openProject, duplicateProject, exportProject, backupProject, deleteProject, importProject, createProject,
 }: {
   fa: boolean;
   projects: Project[];
@@ -14,18 +14,19 @@ export function ProjectLibrary({
   openProject: (item: Project) => void;
   duplicateProject: (id: string) => void;
   exportProject: (item: Project) => void;
+  backupProject: (item: Project) => void;
   deleteProject: (id: string) => void;
   importProject: (file: File | undefined) => void;
   createProject: () => void;
 }) {
   return <section className="workspace-page">
-    <div className="workspace-head"><div><small>PROJECTS</small><h2>{fa ? "پروژه‌های محلی" : "Local projects"}</h2></div><div className="card-actions"><label className="upload-control">{fa ? "ورود JSON" : "Import JSON"}<input type="file" accept="application/json,.json" onChange={(event) => { void importProject(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><button className="primary" type="button" onClick={() => void createProject()}>{fa ? "پروژه تازه" : "New project"}</button></div></div>
-    <p className="lede">{fa ? "هر پروژه، رسانه‌اش و رندرهایش روی همین رایانه می‌ماند. کپی، فایل‌ها را هم برمی‌دارد. خروجی JSON فقط سند صحنه است." : "Each project, its media, and its renders stay on this computer. Duplicate keeps the files. JSON export is the scene document only."}</p>
+    <div className="workspace-head"><div><small>PROJECTS</small><h2>{fa ? "پروژه‌های محلی" : "Local projects"}</h2></div><div className="card-actions"><label className="upload-control">{fa ? "ورود JSON" : "Import JSON"}<input type="file" accept="application/json,.json,application/zip,.zip" onChange={(event) => { void importProject(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><button className="primary" type="button" onClick={() => void createProject()}>{fa ? "پروژه تازه" : "New project"}</button></div></div>
+    <p className="lede">{fa ? "هر پروژه، رسانه‌اش و رندرهایش روی همین رایانه می‌ماند. کپی، فایل‌ها را هم برمی‌دارد. نسخه پشتیبان ZIP شامل استوری‌بورد و رسانه‌هاست؛ خروجی JSON فقط سند صحنه است." : "Each project, its media, and its renders stay on this computer. Duplicate keeps the files. ZIP backup includes the storyboard and media; JSON export is the scene document only."}</p>
     <div className="card-grid">{projects.map((item) => {
       const cardScenes = item.id === project?.id ? scenes : (Array.isArray(item.document?.scenes) ? item.document.scenes : []);
       const seconds = cardScenes.reduce((sum, scene) => sum + (Number(scene.duration) || 0), 0);
       const ratio = outputProfile(item.id === project?.id ? project?.document : item.document) === "shorts-1080p" ? "9:16" : "16:9";
-      return <article className={item.id === project?.id ? "studio-card current" : "studio-card"} key={item.id}><b>{item.title}</b><small className="meta">{cardScenes.length} {fa ? "صحنه" : "scenes"} · {formatTime(seconds)} · {ratio}</small><div className="card-actions"><button type="button" onClick={() => void openProject(item)}>{fa ? "باز کردن" : "Open"}</button><button type="button" onClick={() => void duplicateProject(item.id)}>{fa ? "کپی" : "Duplicate"}</button><button type="button" onClick={() => exportProject(item)}>{fa ? "خروجی" : "Export"}</button><button type="button" className="danger" onClick={() => void deleteProject(item.id)}>{fa ? "حذف" : "Delete"}</button></div></article>;
+      return <article className={item.id === project?.id ? "studio-card current" : "studio-card"} key={item.id}><b>{item.title}</b><small className="meta">{cardScenes.length} {fa ? "صحنه" : "scenes"} · {formatTime(seconds)} · {ratio}</small><div className="card-actions"><button type="button" onClick={() => void openProject(item)}>{fa ? "باز کردن" : "Open"}</button><button type="button" onClick={() => void duplicateProject(item.id)}>{fa ? "کپی" : "Duplicate"}</button><button type="button" onClick={() => backupProject(item)}>{fa ? "پشتیبان ZIP" : "Backup ZIP"}</button><button type="button" onClick={() => exportProject(item)}>{fa ? "خروجی JSON" : "Export JSON"}</button><button type="button" className="danger" onClick={() => void deleteProject(item.id)}>{fa ? "حذف" : "Delete"}</button></div></article>;
     })}</div>
   </section>;
 }
