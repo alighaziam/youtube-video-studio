@@ -20,7 +20,7 @@ export function ProjectLibrary({
   createProject: () => void;
 }) {
   return <section className="workspace-page">
-    <div className="workspace-head"><div><small>PROJECTS</small><h2>{fa ? "پروژه‌های محلی" : "Local projects"}</h2></div><div className="card-actions"><label className="upload-control">{fa ? "ورود JSON" : "Import JSON"}<input type="file" accept="application/json,.json,application/zip,.zip" onChange={(event) => { void importProject(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><button className="primary" type="button" onClick={() => void createProject()}>{fa ? "پروژه تازه" : "New project"}</button></div></div>
+    <div className="workspace-head"><div><small>PROJECTS</small><h2>{fa ? "پروژه‌های محلی" : "Local projects"}</h2></div><div className="card-actions"><label className="upload-control">{fa ? "ورود ZIP / JSON" : "Import ZIP / JSON"}<input type="file" accept="application/json,.json,application/zip,.zip" onChange={(event) => { void importProject(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><button className="primary" type="button" onClick={() => void createProject()}>{fa ? "پروژه تازه" : "New project"}</button></div></div>
     <p className="lede">{fa ? "هر پروژه، رسانه‌اش و رندرهایش روی همین رایانه می‌ماند. کپی، فایل‌ها را هم برمی‌دارد. نسخه پشتیبان ZIP شامل استوری‌بورد و رسانه‌هاست؛ خروجی JSON فقط سند صحنه است." : "Each project, its media, and its renders stay on this computer. Duplicate keeps the files. ZIP backup includes the storyboard and media; JSON export is the scene document only."}</p>
     <div className="card-grid">{projects.map((item) => {
       const cardScenes = item.id === project?.id ? scenes : (Array.isArray(item.document?.scenes) ? item.document.scenes : []);
