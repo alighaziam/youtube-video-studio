@@ -584,7 +584,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-      link.download = item.title.trim().replaceAll(" ", "-") + "-backup.zip";
+    link.download = item.title.trim().replaceAll(" ", "-") + ".json";
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -661,7 +661,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-      link.download = item.title.trim().replaceAll(" ", "-") + "-backup.zip";
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
   };
