@@ -67,7 +67,7 @@ jobs:
           }
           trap cleanup EXIT
           READY=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 45); do
             if curl --connect-timeout 1 --max-time 2 -fsS http://127.0.0.1:8000/api/v1/health >/dev/null && curl --connect-timeout 1 --max-time 2 -fsS http://127.0.0.1:5173/ >/dev/null; then
               READY=1
               break
