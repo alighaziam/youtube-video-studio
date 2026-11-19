@@ -584,7 +584,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${item.title.replace(/[^\w\u0600-\u06FF-]+/g, "-") || "project"}.json`;
+      link.download = item.title.trim().replaceAll(" ", "-") + "-backup.zip";
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -606,7 +606,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = (item.title.replace(/[^\\w\\u0600-\\u06FF-]+/g, "-") || "project") + "-backup.zip";
+      link.download = item.title.trim().replaceAll(" ", "-") + "-backup.zip";
       link.click();
       URL.revokeObjectURL(url);
     } catch (reason) {
@@ -661,7 +661,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = filename;
+      link.download = item.title.trim().replaceAll(" ", "-") + "-backup.zip";
     link.click();
     URL.revokeObjectURL(url);
   };
