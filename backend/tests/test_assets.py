@@ -78,3 +78,21 @@ def test_media_signature_validator_recognizes_supported_containers() -> None:
     assert _matches_media_signature("audio/aac", b"\xff\xf1")
     assert _matches_media_signature("audio/ogg", b"OggSrest")
     assert not _matches_media_signature("image/png", b"not a png")
+
+
+def test_browser_recorded_webm_audio_can_be_uploaded_and_downloaded(tmp_path: Path) -> None:
+    app.state.db_path = tmp_path / "recorded-audio.sqlite3"
+    app.state.assets_dir = tmp_path / "media"
+    project = client.post("/api/v1/projects", json={"title": "Recorded audio", "document": {"scenes": []}}).json()
+    audio_bytes = b"\x1a\x45\xdf\xa3\x93\x42\x86\x81\x01"
+
+    uploaded = client.post(
+        f"/api/v1/projects/{project['id']}/assets",
+        files={"file": ("microphone.webm", audio_bytes, "audio/webm")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    asset = uploaded.json()
+    assert asset["mime_type"] == "audio/webm"
+    downloaded = client.get(f"/api/v1/projects/{project['id']}/assets/{asset['id']}/file")
+    assert downloaded.status_code == 200
+    assert downloaded.content == audio_bytes
