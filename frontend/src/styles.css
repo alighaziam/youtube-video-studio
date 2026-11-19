@@ -222,3 +222,7 @@ body{font-size:14px;background:#090e1c}
 
 .audio-noise-option{display:flex;align-items:center;gap:8px;font-size:12px;color:#c4cee0;margin-top:8px}
 .audio-noise-option input{accent-color:#8e87ff}
+
+.canvas-layer{cursor:grab;touch-action:none}
+.canvas-layer.selected{cursor:grabbing}
+.canvas-layer .layer-resize-handle{cursor:nwse-resize;touch-action:none}
