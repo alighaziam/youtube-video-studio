@@ -215,3 +215,7 @@ body{font-size:14px;background:#090e1c}
 .timeline .playhead{z-index:3}
 .playback .split-button{width:auto;height:auto;border-radius:8px;padding:7px 11px;background:#28274b;color:#f1efff}
 .playback .split-button:disabled{opacity:.35;cursor:not-allowed}
+
+.version-history{display:grid;gap:8px;padding:10px;border:1px solid #2b3852;border-radius:10px;background:#0e1627}
+.version-history>div{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#9eacc4;font-size:11px}
+.version-history button{border:1px solid #5b579f;background:#26264a;color:#e5e2ff;border-radius:8px;padding:6px 9px;cursor:pointer;white-space:nowrap}
