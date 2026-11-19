@@ -49,6 +49,7 @@ def test_render_applies_voice_trim_and_gain_without_losing_audio(tmp_path: Path)
                 "voiceGain": 0.5,
                 "voiceFadeIn": 0.2,
                 "voiceFadeOut": 0.2,
+                "voiceNoiseReduction": True,
             }]}), "now", "now"),
         )
         db.execute(
