@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sqlite3
+import tempfile
 import uuid
+import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
+
+from .assets import ALLOWED_TYPES, _matches_media_signature
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -277,3 +284,225 @@ def delete_project(project_id: str, request: Request) -> None:
     for media_path in media_paths:
         media_path.unlink(missing_ok=True)
     shutil.rmtree(project_dir, ignore_errors=True)
+
+
+MAX_BACKUP_BYTES = 500 * 1024 * 1024
+MAX_BACKUP_ASSETS = 500
+MAX_MANIFEST_BYTES = 5 * 1024 * 1024
+
+
+def _remove_backup(path: str) -> None:
+    Path(path).unlink(missing_ok=True)
+
+
+@router.get("/{project_id}/backup", summary="Export a complete project backup")
+def export_project_backup(project_id: str, request: Request) -> FileResponse:
+    try:
+        safe_project_id = str(uuid.UUID(project_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid project identifier") from None
+    if safe_project_id != project_id.lower():
+        raise HTTPException(status_code=400, detail="Invalid project identifier")
+
+    base_dir = _assets_root(request)
+    project_dir = (base_dir / safe_project_id).resolve()
+    if project_dir.parent != base_dir:
+        raise HTTPException(status_code=400, detail="Invalid project asset path")
+    with _connect(request) as db:
+        row = db.execute("SELECT * FROM projects WHERE id = ?", (safe_project_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        _ensure_assets(db)
+        assets = db.execute(
+            "SELECT id, original_name, mime_type, relative_path, size_bytes "
+            "FROM assets WHERE project_id = ? ORDER BY created_at",
+            (safe_project_id,),
+        ).fetchall()
+
+    if len(assets) > MAX_BACKUP_ASSETS:
+        raise HTTPException(status_code=413, detail="Project has too many media assets")
+
+    manifest_assets: list[dict[str, Any]] = []
+    media_files: list[tuple[Path, str]] = []
+    total_bytes = 0
+    for asset in assets:
+        try:
+            asset_id = str(uuid.UUID(asset["id"]))
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=409, detail="Project contains an invalid asset identifier") from None
+        extension = ALLOWED_TYPES.get(asset["mime_type"])
+        if extension is None:
+            raise HTTPException(status_code=409, detail="Project contains an unsupported media type")
+        expected_path = (project_dir / f"{asset_id}{extension}").resolve()
+        stored_path = (base_dir / asset["relative_path"]).resolve()
+        if stored_path != expected_path or not stored_path.is_file():
+            raise HTTPException(status_code=409, detail="A project media file is missing or has an invalid path")
+        size = stored_path.stat().st_size
+        if size > 250 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="A project media file exceeds the backup limit")
+        total_bytes += size
+        if total_bytes > MAX_BACKUP_BYTES:
+            raise HTTPException(status_code=413, detail="Project media exceeds the 500 MB backup limit")
+        archive_path = f"media/{asset_id}{extension}"
+        manifest_assets.append({
+            "id": asset_id,
+            "name": asset["original_name"],
+            "mime_type": asset["mime_type"],
+            "size_bytes": size,
+            "archive_path": archive_path,
+        })
+        media_files.append((stored_path, archive_path))
+
+    manifest = {
+        "format": "youtube-video-studio-backup",
+        "format_version": 1,
+        "title": row["title"],
+        "document": json.loads(row["document_json"]),
+        "assets": manifest_assets,
+    }
+    safe_title = re.sub(r"[^\w\u0600-\u06FF-]+", "-", row["title"], flags=re.UNICODE).strip("-")[:80] or "project"
+
+    temporary = tempfile.NamedTemporaryFile(prefix="studio-backup-", suffix=".zip", delete=False)
+    temporary_path = temporary.name
+    temporary.close()
+    try:
+        with zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+            archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, separators=(",", ":")))
+            for media_source, archive_path in media_files:
+                archive.write(media_source, archive_path)
+    except Exception:
+        _remove_backup(temporary_path)
+        raise
+    return FileResponse(
+        temporary_path,
+        media_type="application/zip",
+        filename=f"{safe_title}-backup.zip",
+        background=BackgroundTask(_remove_backup, temporary_path),
+    )
+
+
+@router.post(
+    "/backup/import",
+    response_model=ProjectRecord,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import a complete project backup",
+)
+async def import_project_backup(request: Request, file: UploadFile = File(...)) -> ProjectRecord:
+    base_dir = _assets_root(request)
+    project_id = str(uuid.uuid4())
+    project_dir = (base_dir / project_id).resolve()
+    if project_dir.parent != base_dir:
+        raise HTTPException(status_code=400, detail="Invalid project asset path")
+
+    try:
+        file.file.seek(0, 2)
+        compressed_size = file.file.tell()
+        file.file.seek(0)
+        if compressed_size > MAX_BACKUP_BYTES:
+            raise HTTPException(status_code=413, detail="Backup file exceeds the 500 MB limit")
+
+        with zipfile.ZipFile(file.file, "r") as archive:
+            entries = archive.infolist()
+            names = [entry.filename for entry in entries]
+            if len(names) != len(set(names)) or "manifest.json" not in names:
+                raise HTTPException(status_code=400, detail="Backup archive is invalid")
+            manifest_info = archive.getinfo("manifest.json")
+            if manifest_info.file_size > MAX_MANIFEST_BYTES:
+                raise HTTPException(status_code=413, detail="Backup manifest is too large")
+            manifest = json.loads(archive.read("manifest.json"))
+            if (
+                not isinstance(manifest, dict)
+                or manifest.get("format") != "youtube-video-studio-backup"
+                or manifest.get("format_version") != 1
+                or not isinstance(manifest.get("document"), dict)
+                or not isinstance(manifest.get("assets"), list)
+            ):
+                raise HTTPException(status_code=400, detail="Unsupported or malformed project backup")
+
+            title = str(manifest.get("title") or "Imported project").strip()[:160] or "Imported project"
+            document = manifest["document"]
+            assets = manifest["assets"]
+            if len(assets) > MAX_BACKUP_ASSETS:
+                raise HTTPException(status_code=413, detail="Backup contains too many media assets")
+
+            expected_names = {"manifest.json"}
+            validated_assets: list[tuple[dict[str, Any], zipfile.ZipInfo, str]] = []
+            total_bytes = 0
+            for asset in assets:
+                if not isinstance(asset, dict):
+                    raise HTTPException(status_code=400, detail="Backup asset metadata is invalid")
+                try:
+                    old_id = str(uuid.UUID(str(asset.get("id", ""))))
+                except (ValueError, AttributeError):
+                    raise HTTPException(status_code=400, detail="Backup contains an invalid asset identifier") from None
+                mime_type = asset.get("mime_type")
+                extension = ALLOWED_TYPES.get(mime_type)
+                archive_path = f"media/{old_id}{extension}" if extension else ""
+                if not extension or asset.get("archive_path") != archive_path:
+                    raise HTTPException(status_code=400, detail="Backup asset path or media type is invalid")
+                if archive_path in expected_names:
+                    raise HTTPException(status_code=400, detail="Backup contains duplicate asset entries")
+                expected_names.add(archive_path)
+                try:
+                    info = archive.getinfo(archive_path)
+                except KeyError:
+                    raise HTTPException(status_code=400, detail="Backup is missing a media file") from None
+                if info.file_size > 250 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="A backup media file exceeds the 250 MB limit")
+                total_bytes += info.file_size
+                if total_bytes > MAX_BACKUP_BYTES:
+                    raise HTTPException(status_code=413, detail="Backup media exceeds the 500 MB limit")
+                validated_assets.append((asset, info, extension))
+
+            if set(names) != expected_names:
+                raise HTTPException(status_code=400, detail="Backup contains unexpected archive entries")
+
+            project_dir.mkdir(parents=True, exist_ok=False)
+            now = _now()
+            mapping: dict[str, str] = {}
+            records: list[tuple[str, str, str, str, int, str]] = []
+            for asset, info, extension in validated_assets:
+                new_asset_id = str(uuid.uuid4())
+                target = (project_dir / f"{new_asset_id}{extension}").resolve()
+                if target.parent != project_dir:
+                    raise HTTPException(status_code=400, detail="Invalid imported media path")
+                with archive.open(info, "r") as source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output, length=1024 * 1024)
+                with target.open("rb") as uploaded:
+                    signature = uploaded.read(16)
+                if not _matches_media_signature(asset["mime_type"], signature):
+                    raise HTTPException(status_code=415, detail="Backup media content does not match its declared type")
+                size = target.stat().st_size
+                if size != info.file_size:
+                    raise HTTPException(status_code=400, detail="Backup media size does not match its archive entry")
+                mapping[str(uuid.UUID(asset["id"]))] = new_asset_id
+                records.append((
+                    new_asset_id,
+                    asset["name"] if isinstance(asset.get("name"), str) else "Imported media",
+                    asset["mime_type"],
+                    target.relative_to(base_dir).as_posix(),
+                    size,
+                    now,
+                ))
+
+        copied_document = _copy_document(document, mapping)
+        with _connect(request) as db:
+            _ensure_assets(db)
+            db.execute(
+                "INSERT INTO projects VALUES (?, ?, ?, ?, ?)",
+                (project_id, title, json.dumps(copied_document, ensure_ascii=False), now, now),
+            )
+            db.executemany(
+                "INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [(asset_id, project_id, name, mime, relative, size, created) for asset_id, name, mime, relative, size, created in records],
+            )
+            created = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        return _record(created)
+    except HTTPException:
+        shutil.rmtree(project_dir, ignore_errors=True)
+        raise
+    except (zipfile.BadZipFile, json.JSONDecodeError, KeyError, TypeError, ValueError, OSError) as error:
+        shutil.rmtree(project_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="Could not read the project backup") from error
+    finally:
+        await file.close()
