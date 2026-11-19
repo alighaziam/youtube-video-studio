@@ -28,9 +28,13 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Comman
 New-Item -ItemType Directory -Force -Path ".data" | Out-Null
 $Api = $null
 $Ui = $null
+$ApiOut = Join-Path $Root ".data\api.stdout.log"
+$ApiErr = Join-Path $Root ".data\api.stderr.log"
+$UiOut = Join-Path $Root ".data\vite.stdout.log"
+$UiErr = Join-Path $Root ".data\vite.stderr.log"
 try {
-    $Api = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList @("-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000") -PassThru -NoNewWindow
-    $Ui = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "npm --prefix frontend run dev -- --host 127.0.0.1") -PassThru -NoNewWindow
+    $Api = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList @("-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000") -WorkingDirectory $Root -PassThru -NoNewWindow -RedirectStandardOutput $ApiOut -RedirectStandardError $ApiErr
+    $Ui = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "npm --prefix frontend run dev -- --host 127.0.0.1") -WorkingDirectory $Root -PassThru -NoNewWindow -RedirectStandardOutput $UiOut -RedirectStandardError $UiErr
     Write-Host "FrameLab API: http://127.0.0.1:8000"
     Write-Host "FrameLab UI:  http://127.0.0.1:5173"
     Write-Host "Press Ctrl+C to stop both services."
@@ -38,6 +42,16 @@ try {
         Start-Sleep -Seconds 1
         $Api.Refresh()
         $Ui.Refresh()
+    }
+    if ($Api.HasExited) {
+        Write-Host "API process exited. Output:"
+        if (Test-Path $ApiOut) { Get-Content $ApiOut }
+        if (Test-Path $ApiErr) { Get-Content $ApiErr }
+    }
+    if ($Ui.HasExited) {
+        Write-Host "Vite process exited. Output:"
+        if (Test-Path $UiOut) { Get-Content $UiOut }
+        if (Test-Path $UiErr) { Get-Content $UiErr }
     }
     throw "A development service exited; stopping the other service."
 }
