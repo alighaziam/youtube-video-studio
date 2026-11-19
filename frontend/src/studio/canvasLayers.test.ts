@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { orderPreviewLayers } from "./canvasLayers";
+import { orderPreviewLayers, transformCanvasLayer } from "./canvasLayers";
 import type { SceneLayer } from "./types";
 
 const layer = (id: string, type: SceneLayer["type"], zIndex: number, visible = true): SceneLayer => ({
@@ -31,7 +31,6 @@ describe("orderPreviewLayers", () => {
   });
 });
 
-import { transformCanvasLayer } from "./canvasLayers";
 
 describe("transformCanvasLayer", () => {
   it("keeps moved layers inside the canvas", () => {
