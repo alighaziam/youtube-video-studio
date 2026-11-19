@@ -228,10 +228,32 @@ def duplicate_project(project_id: str, request: Request) -> ProjectRecord:
     return _record(created)
 
 
-@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a project", responses={404: {"description": "Project not found"}})
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a project and its media", responses={404: {"description": "Project not found"}})
 def delete_project(project_id: str, request: Request) -> None:
-    """Removes the project row. Media files already on disk are left in place."""
+    """Delete the project, its asset records, and files confined to its media directory."""
+    base_dir = _assets_root(request)
+    project_dir = (base_dir / project_id).resolve()
+    if base_dir not in project_dir.parents:
+        raise HTTPException(status_code=400, detail="Invalid project asset path")
+
+    media_paths: list[Path] = []
     with _connect(request) as db:
+        _ensure_assets(db)
+        rows = db.execute(
+            "SELECT relative_path FROM assets WHERE project_id = ?",
+            (project_id,),
+        ).fetchall()
+        for row in rows:
+            media_path = (base_dir / row["relative_path"]).resolve()
+            if base_dir not in media_path.parents:
+                raise HTTPException(status_code=400, detail="Invalid asset path")
+            media_paths.append(media_path)
+
         cursor = db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Project not found")
+        db.execute("DELETE FROM assets WHERE project_id = ?", (project_id,))
+
+    for media_path in media_paths:
+        media_path.unlink(missing_ok=True)
+    shutil.rmtree(project_dir, ignore_errors=True)
