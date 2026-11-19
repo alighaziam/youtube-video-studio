@@ -72,6 +72,7 @@ def test_media_signature_validator_recognizes_supported_containers() -> None:
     assert _matches_media_signature("image/webp", b"RIFF1234WEBPrest")
     assert _matches_media_signature("video/mp4", b"0000ftypisom")
     assert _matches_media_signature("video/webm", b"\x1a\x45\xdf\xa3rest")
+    assert _matches_media_signature("audio/webm", b"\x1a\x45\xdf\xa3rest")
     assert _matches_media_signature("audio/mpeg", b"ID3rest")
     assert _matches_media_signature("audio/wav", b"RIFF1234WAVE")
     assert _matches_media_signature("audio/aac", b"\xff\xf1")
