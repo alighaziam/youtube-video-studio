@@ -735,7 +735,7 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 subtitle_filter += ":fontsdir=fonts"
             temporary_output = temp_dir / "output.mp4"
             command = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(base_video)]
-            for voice_path, _delay in voice_inputs:
+            for voice_path, _delay, _trim_start, _clip_duration, _gain in voice_inputs:
                 command.extend(["-i", str(voice_path)])
             command.extend(["-vf", subtitle_filter])
             if voice_inputs:
