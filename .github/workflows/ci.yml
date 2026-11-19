@@ -133,12 +133,19 @@ jobs:
       - name: Smoke-test Windows startup script
         shell: powershell
         run: |
-          $Process = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/run-dev.ps1") -PassThru -WindowStyle Hidden
+          New-Item -ItemType Directory -Force -Path ".data" | Out-Null
+          $StartupOut = Join-Path $PWD ".data\startup.stdout.log"
+          $StartupErr = Join-Path $PWD ".data\startup.stderr.log"
+          $Process = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/run-dev.ps1") -PassThru -WindowStyle Hidden -RedirectStandardOutput $StartupOut -RedirectStandardError $StartupErr
           $Ready = $false
           try {
             for ($Index = 0; $Index -lt 240; $Index++) {
               $Process.Refresh()
-              if ($Process.HasExited) { throw "The Windows startup script exited before the services became ready." }
+              if ($Process.HasExited) {
+                if (Test-Path $StartupOut) { Get-Content $StartupOut }
+                if (Test-Path $StartupErr) { Get-Content $StartupErr }
+                throw "The Windows startup script exited before the services became ready."
+              }
               try {
                 $Api = Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/v1/health" -UseBasicParsing -TimeoutSec 2
                 $Ui = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -UseBasicParsing -TimeoutSec 2
