@@ -46,6 +46,17 @@ jobs:
         env:
           PYTHONPATH: backend
         run: python -m pytest backend/tests -q -ra -m smoke
+      - name: Render Persian subtitle visual sample
+        env:
+          PYTHONPATH: backend
+        run: python backend/scripts/render_persian_sample.py
+      - name: Upload Persian subtitle visual sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: persian-subtitle-visual-sample
+          path: artifacts/persian-render/
+          if-no-files-found: error
+          retention-days: 7
 
   frontend:
     name: Frontend production build (Node 20)
