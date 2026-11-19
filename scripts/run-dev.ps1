@@ -14,22 +14,36 @@ if ([version]$PythonVersion -lt [version]"3.11") { throw "Python 3.11 or newer i
 $NodeMajor = [int]((& node -p "Number(process.versions.node.split('.')[0])"))
 if ($NodeMajor -lt 20) { throw "Node.js 20 or newer is required." }
 
-if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
+New-Item -ItemType Directory -Force -Path ".data" | Out-Null
+if (-not (Test-Path ".\\.venv\\Scripts\\python.exe")) {
     & python -m venv .venv
 }
-& .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-if ($LASTEXITCODE -ne 0) { throw "Backend dependency installation failed." }
+$RequirementsHash = (Get-FileHash "backend\\requirements.txt" -Algorithm SHA256).Hash
+$RequirementsMarker = Join-Path $Root ".venv\\.requirements.sha256"
+$InstalledRequirementsHash = if (Test-Path $RequirementsMarker) { (Get-Content $RequirementsMarker -Raw).Trim() } else { "" }
+if ($InstalledRequirementsHash -ne $RequirementsHash) {
+    & .\\.venv\\Scripts\\python.exe -m pip install -r backend\\requirements.txt
+    if ($LASTEXITCODE -ne 0) { throw "Backend dependency installation failed." }
+    Set-Content -Path $RequirementsMarker -Value $RequirementsHash -NoNewline
+}
 
-if (-not (Test-Path (Join-Path $Frontend "package-lock.json"))) {
+$PackageLock = Join-Path $Frontend "package-lock.json"
+if (-not (Test-Path $PackageLock)) {
     throw "frontend/package-lock.json is required for a reproducible startup."
 }
-Push-Location $Frontend
-try {
-    & npm ci --no-audit --no-fund
-    if ($LASTEXITCODE -ne 0) { throw "Frontend dependency installation failed." }
-}
-finally {
-    Pop-Location
+$FrontendLockHash = (Get-FileHash $PackageLock -Algorithm SHA256).Hash
+$FrontendMarker = Join-Path $Root ".data\\frontend-package-lock.sha256"
+$InstalledFrontendHash = if (Test-Path $FrontendMarker) { (Get-Content $FrontendMarker -Raw).Trim() } else { "" }
+if (-not (Test-Path (Join-Path $Frontend "node_modules")) -or $InstalledFrontendHash -ne $FrontendLockHash) {
+    Push-Location $Frontend
+    try {
+        & npm ci --no-audit --no-fund
+        if ($LASTEXITCODE -ne 0) { throw "Frontend dependency installation failed." }
+        Set-Content -Path $FrontendMarker -Value $FrontendLockHash -NoNewline
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
