@@ -14,3 +14,27 @@ export function orderPreviewLayers(layers: SceneLayer[]): SceneLayer[] {
     .sort((a, b) => a.zIndex - b.zIndex);
   return [...media, ...overlays].map((layer, index) => ({ ...layer, zIndex: index + 1 }));
 }
+
+export function transformCanvasLayer(
+  layer: SceneLayer,
+  dxPercent: number,
+  dyPercent: number,
+  mode: "move" | "resize",
+): Pick<SceneLayer, "x" | "y" | "width" | "height"> {
+  const clamp = (value: number, minimum: number, maximum: number) =>
+    Math.max(minimum, Math.min(maximum, value));
+  if (mode === "move") {
+    return {
+      x: clamp(layer.x + dxPercent, 0, Math.max(0, 100 - layer.width)),
+      y: clamp(layer.y + dyPercent, 0, Math.max(0, 100 - layer.height)),
+      width: layer.width,
+      height: layer.height,
+    };
+  }
+  return {
+    x: layer.x,
+    y: layer.y,
+    width: clamp(layer.width + dxPercent, 5, Math.max(5, 100 - layer.x)),
+    height: clamp(layer.height + dyPercent, 5, Math.max(5, 100 - layer.y)),
+  };
+}
