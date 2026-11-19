@@ -10,8 +10,8 @@ Updated: 2026-11-19
 | Project persistence | Implemented | SQLite CRUD, autosave, duplicate with media copy, JSON document import/export, versioned ZIP backup/restore including source media with ID remapping, and named snapshots with restore/automatic pre-restore snapshot (30 retained per project) |
 | Script-to-storyboard | Initial | Converts paragraphs/sentences to suggested scenes; editable title, type, duration and narration |
 | Project media library | Initial | Frontend upload/list/delete; image previews; scene-level media references and image/video preview; backend MIME allowlist, 250 MB cap, project isolation, path confinement and file streaming |
-| Local voice-over | Implemented | Optional Piper synthesis plus browser microphone recording, scene audio assignment, playback, and automatic duration probing; Piper still requires a user-installed engine and licensed models |
-| MP4 audio mix | Implemented | FFmpeg supports per-scene trim start/end, linear gain, fade-in/fade-out, scene offsets, duration probing, and final audio-stream validation |
+| Local voice-over | Implemented | Optional Piper synthesis, browser microphone recording, local faster-whisper transcription, scene audio assignment, playback, and automatic duration probing; Piper/Whisper require user-installed engines and local licensed model files |
+| MP4 audio mix | Implemented | FFmpeg supports per-scene trim start/end, linear gain, fade-in/fade-out, optional afftdn noise reduction, scene offsets, duration probing, and final audio-stream validation |
 | Subtitle conversion | Implemented | SRT/VTT endpoints, editable narration page, SRT download, word preview |
 | Publishing pack | Implemented | Draft titles, description, chapters, tags, thumbnail brief, and Markdown download |
 | MP4 rendering | Initial | FFmpeg scene composition for attached media and layers; deterministic diagrams; 16:9/9:16 output; captions and voice processing; ffprobe validation; content-addressed scene checkpoints reused only after media validation |
@@ -22,7 +22,7 @@ Updated: 2026-11-19
 
 - Diagram choice is keyword-based and local. It is not a language model. Labels still need a human pass.
 - The preview mirrors the encoder composition order: image/video media layers are composited first, then text/code/diagram overlays. Exact pixel parity for fonts, text metrics, and video decoding still needs visual regression coverage.
-- Uploaded audio and browser-recorded WebM can be attached per scene. The editor displays a local waveform for supported files under 32 MB and supports trim, gain, fade-in and fade-out. Automatic loudness normalization and noise reduction remain open.
+- Uploaded audio and browser-recorded WebM can be attached per scene. The editor displays a local waveform for supported files under 32 MB and supports trim, gain, fade-in/out, optional FFmpeg noise reduction, and local Whisper transcription when a model is configured. Automatic loudness normalization and phoneme-level caption alignment remain open.
 - The timeline reorders scenes, resizes duration, and shows voice and word lanes. It does not split a clip or snap to a grid.
 - Captions are readable word groups timed from the scene length, or from the probed voice length at render time. The caption block can sit at the lower edge, the middle, or the upper edge; preview and ASS use that same placement. There is no phoneme alignment.
 - Render jobs are stored in SQLite with progress, cancel, and retry. Completed scene segments are cached by content fingerprint and revalidated with ffprobe before reuse across later jobs.
