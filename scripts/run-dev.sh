@@ -23,9 +23,7 @@ if [[ ! -x .venv/bin/python ]]; then
   python3 -m venv .venv
 fi
 .venv/bin/python -m pip install -r backend/requirements.txt
-if [[ ! -d frontend/node_modules ]]; then
-  npm --prefix frontend install
-fi
+npm --prefix "$ROOT/frontend" ci --no-audit --no-fund
 
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
   echo "Warning: FFmpeg/ffprobe is missing; editing works but MP4 rendering will be unavailable." >&2
@@ -45,7 +43,7 @@ trap 'cleanup; exit 130' INT TERM
 
 .venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 &
 API_PID=$!
-npm --prefix frontend run dev -- --host 127.0.0.1 &
+(cd "$ROOT/frontend" && npm run dev -- --host 127.0.0.1) &
 UI_PID=$!
 
 echo "FrameLab API: http://127.0.0.1:8000"
