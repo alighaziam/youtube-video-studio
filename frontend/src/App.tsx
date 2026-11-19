@@ -14,6 +14,7 @@ import { CaptionPage, ProjectLibrary, TemplateLibrary } from "./studio/Workspace
 import { TimelineBoard } from "./studio/TimelineBoard";
 import { SceneInspector } from "./studio/SceneInspector";
 import { AudioWaveform } from "./studio/AudioWaveform";
+import { splitSceneAt } from "./studio/timeline";
 
 export default function App() {
   const [active, setActive] = useState("scene-03");
@@ -85,6 +86,12 @@ export default function App() {
     return starts;
   }, [scenes]);
   const captionCues = useMemo(() => scenes.flatMap((scene) => wordCuesForScene(scene, sceneStarts.get(scene.id) ?? 0)), [scenes, sceneStarts]);
+  const splitTarget = scenes.find((scene) => {
+    const start = sceneStarts.get(scene.id) ?? 0;
+    return playhead >= start && playhead < start + scene.duration;
+  });
+  const splitLocalTime = splitTarget ? Math.round(playhead - (sceneStarts.get(splitTarget.id) ?? 0)) : 0;
+  const canSplitAtPlayhead = Boolean(splitTarget && splitLocalTime >= 1 && splitLocalTime < splitTarget.duration);
   const activeWordIndex = captionCues.findIndex((cue) => playhead >= cue.start && playhead < cue.end);
   const selectedAsset = assets.find(asset => asset.id === selected?.assetId);
   const selectedVoiceAsset = assets.find(asset => asset.id === selected?.voiceAssetId);
@@ -527,6 +534,26 @@ export default function App() {
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);
+  };
+  const splitAtPlayhead = () => {
+    if (!splitTarget || !canSplitAtPlayhead) return;
+    const result = splitSceneAt(
+      splitTarget,
+      splitLocalTime,
+      fa ? `${splitTarget.title} — بخش دوم` : `${splitTarget.title} — Part 2`,
+    );
+    if (!result) return;
+    const [first, second] = result;
+    rememberEdits();
+    setScenes((items) => {
+      const index = items.findIndex((scene) => scene.id === splitTarget.id);
+      if (index < 0) return items;
+      const next = [...items];
+      next.splice(index, 1, first, second);
+      return next;
+    });
+    setActive(second.id);
+    setPlayhead((sceneStarts.get(splitTarget.id) ?? 0) + first.duration);
   };
   const seekTimeline = (event: React.MouseEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -973,7 +1000,7 @@ export default function App() {
             </div>;
           })}
         </div></div>
-        <div className="playback"><button type="button" onClick={() => { if (playhead >= totalSeconds) setPlayhead(0); setPlaying((value) => !value); }}>{playing ? "❚❚" : "▶"}</button><span>{formatTime(playhead)}</span><div className="bar"><i style={{ width: `${totalSeconds ? Math.min(100, (playhead / totalSeconds) * 100) : 0}%` }}/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "تایم‌لاین قابل پخش · تصویر ثابت" : "Playable timeline · static picture"}</small></div>
+        <div className="playback"><button type="button" onClick={() => { if (playhead >= totalSeconds) setPlayhead(0); setPlaying((value) => !value); }}>{playing ? "❚❚" : "▶"}</button><span>{formatTime(playhead)}</span><div className="bar"><i style={{ width: `${totalSeconds ? Math.min(100, (playhead / totalSeconds) * 100) : 0}%` }}/></div><span>{formatTime(totalSeconds)}</span><small>{fa ? "تایم‌لاین قابل پخش · برش روی شبکه ۱ ثانیه" : "Playable timeline · 1-second snap"}</small><button type="button" className="split-button" disabled={!canSplitAtPlayhead} onClick={splitAtPlayhead}>{fa ? "برش در نشانگر" : "Split at playhead"}</button></div>
         <TimelineBoard fa={fa} scenes={scenes} active={active} sceneStarts={sceneStarts} totalSeconds={totalSeconds} pixelsPerSecond={pixelsPerSecond} playhead={playhead} captionCues={captionCues} activeWordIndex={activeWordIndex} seekTimeline={seekTimeline} selectScene={selectScene} moveScene={moveScene} beginResize={beginResize} dragSceneId={dragSceneId} />
         {error && <div className="error-banner">{error} — {fa ? "سرور محلی را طبق راهنمای README اجرا کن." : "Start the local API using the README instructions."}</div>}{capabilityWarning && <div className="error-banner">{capabilityWarning}</div>}{renderMessage && <div className={renderState === "failed" || renderState === "cancelled" ? "error-banner" : "render-banner"}>{renderMessage}{renderDownloadUrl && <a className="download-link" href={renderDownloadUrl}>{fa ? "دانلود ویدیوی MP4" : "Download MP4"}</a>}</div>}{renderJobs.length > 0 && <div className="render-queue"><b>{fa ? "صف رندر" : "Render queue"}</b>{renderJobs.slice(0, 6).map((job) => <div key={job.id}><span className={`status-pill ${job.status}`}>{jobStatus(job.status)}</span><div className="job-progress"><i style={{ width: `${Math.max(0, Math.min(100, job.progress ?? (job.status === "completed" ? 100 : 0)))}%` }} /></div>{job.width && job.height ? <small>{job.width}×{job.height}</small> : null}{job.status === "completed" && <a href={`${API}/jobs/${job.id}/download`}>{fa ? "دانلود" : "Download"}</a>}{(job.status === "queued" || job.status === "running") && <button type="button" onClick={() => void cancelRender(job.id)}>{fa ? "لغو" : "Cancel"}</button>}{(job.status === "failed" || job.status === "cancelled") && <button type="button" onClick={() => void retryRender(job.id)}>{fa ? "تلاش دوباره" : "Retry"}</button>}{job.error && <small>{job.error}</small>}</div>)}</div>}{publishingPack && <section className="publish-sheet"><header><b>{fa ? "بسته انتشار" : "Publishing pack"}</b><button type="button" onClick={downloadPublishingPack}>{fa ? "دانلود Markdown" : "Download Markdown"}</button><small>{publishingPack.disclaimer}</small></header><div className="title-options">{publishingPack.title_options.map((title) => <button type="button" dir={readingDirection(title)} key={title} onClick={() => void navigator.clipboard.writeText(title)}>{title}</button>)}</div><p dir={readingDirection(publishingPack.description)}>{publishingPack.description}</p><div className="tag-row">{publishingPack.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><ol>{publishingPack.chapters.map((chapter) => <li dir={readingDirection(chapter)} key={chapter}>{chapter}</li>)}</ol><p className="muted" dir={readingDirection(publishingPack.thumbnail_brief)}>{publishingPack.thumbnail_brief}</p></section>}
       </section>}
