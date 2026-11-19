@@ -588,9 +588,45 @@ export default function App() {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const backupProject = async (item: Project) => {
+    try {
+      if (item.id === project?.id && project) {
+        const saved = await fetch(API + "/projects/" + item.id, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ document: { ...project.document, scenes } }),
+        });
+        if (!saved.ok) throw new Error(fa ? "ذخیره پروژه پیش از تهیه نسخه پشتیبان ناموفق بود." : "Could not save the project before creating its backup.");
+      }
+      const response = await fetch(API + "/projects/" + item.id + "/backup");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? (fa ? "تهیه نسخه پشتیبان ناموفق بود." : "Could not create the project backup."));
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (item.title.replace(/[^\\w\\u0600-\\u06FF-]+/g, "-") || "project") + "-backup.zip";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : (fa ? "تهیه نسخه پشتیبان ناموفق بود." : "Could not create the project backup."));
+    }
+  };
   const importProject = async (file: File | undefined) => {
     if (!file) return;
     try {
+      if (file.name.toLowerCase().endsWith(".zip") || file.type === "application/zip") {
+        const form = new FormData();
+        form.append("file", file);
+        const restored = await fetch(API + "/projects/backup/import", { method: "POST", body: form });
+        const body = await restored.json();
+        if (!restored.ok) throw new Error(body.detail ?? (fa ? "بازیابی نسخه پشتیبان ناموفق بود." : "Could not restore the project backup."));
+        const created = body as Project;
+        setProjects((list) => [created, ...list.filter((item) => item.id !== created.id)]);
+        await openProject(created, true);
+        return;
+      }
       const parsed = JSON.parse(await file.text()) as { title?: string; document?: Project["document"] };
       const title = String(parsed.title || file.name.replace(/\.json$/i, "") || (fa ? "پروژه واردشده" : "Imported project")).slice(0, 160);
       const document = parsed.document && typeof parsed.document === "object" ? parsed.document : { schemaVersion: 1, scenes: [] };
@@ -805,7 +841,7 @@ export default function App() {
       <div className="local">● {fa ? "پردازش محلی · بدون فضای ابری" : "Local processing · No cloud"}</div>
     </aside>
     <main className={nav === "editor" ? "main" : "main workspace"}>
-      {nav === "projects" && <ProjectLibrary fa={fa} projects={projects} project={project} scenes={scenes} openProject={openProject} duplicateProject={duplicateProject} exportProject={exportProject} deleteProject={deleteProject} importProject={importProject} createProject={createProject} />}
+      {nav === "projects" && <ProjectLibrary fa={fa} projects={projects} project={project} scenes={scenes} openProject={openProject} duplicateProject={duplicateProject} exportProject={exportProject} deleteProject={deleteProject} importProject={importProject} backupProject={backupProject} createProject={createProject} />}
       {nav === "templates" && <TemplateLibrary fa={fa} insertTemplate={insertTemplate} />}
       {nav === "captions" && <CaptionPage fa={fa} scenes={scenes} captionStyle={captionStyle} setCaptionStyle={(style) => { void setCaptionStyle(style); }} rememberEdits={rememberEdits} setActive={setActive} setScenes={setScenes} downloadSrt={downloadSrt} />}
       {nav === "editor" && <section className="scenes">
