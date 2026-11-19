@@ -82,6 +82,19 @@ class ProjectRecord(BaseModel):
     updated_at: str = Field(description="ISO-8601 UTC")
 
 
+class ProjectVersionRecord(BaseModel):
+    id: str
+    project_id: str
+    label: str
+    title: str
+    scene_count: int
+    created_at: str
+
+
+class ProjectVersionCreate(BaseModel):
+    label: str = Field(default="Manual snapshot", min_length=1, max_length=80)
+
+
 def _record(row: sqlite3.Row) -> ProjectRecord:
     return ProjectRecord(
         id=row["id"], title=row["title"],
@@ -120,6 +133,57 @@ def get_project(project_id: str, request: Request) -> ProjectRecord:
     return _record(row)
 
 
+@router.get("/{project_id}/versions", response_model=list[ProjectVersionRecord], summary="List project snapshots")
+def list_project_versions(project_id: str, request: Request) -> list[ProjectVersionRecord]:
+    with _connect(request) as db:
+        project = db.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        _ensure_versions(db)
+        rows = db.execute(
+            "SELECT * FROM project_versions WHERE project_id = ? ORDER BY created_at DESC, rowid DESC",
+            (project_id,),
+        ).fetchall()
+    return [_version_record(row) for row in rows]
+
+
+@router.post("/{project_id}/versions", response_model=ProjectVersionRecord, status_code=status.HTTP_201_CREATED, summary="Create a named project snapshot")
+def create_project_version(project_id: str, payload: ProjectVersionCreate, request: Request) -> ProjectVersionRecord:
+    with _connect(request) as db:
+        row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        _insert_version(db, project_id, row["title"], row["document_json"], payload.label.strip() or "Manual snapshot")
+        created = db.execute(
+            "SELECT * FROM project_versions WHERE project_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+    return _version_record(created)
+
+
+@router.post("/{project_id}/versions/{version_id}/restore", response_model=ProjectRecord, summary="Restore a project snapshot")
+def restore_project_version(project_id: str, version_id: str, request: Request) -> ProjectRecord:
+    with _connect(request) as db:
+        current = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if current is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        _ensure_versions(db)
+        version = db.execute(
+            "SELECT * FROM project_versions WHERE id = ? AND project_id = ?",
+            (version_id, project_id),
+        ).fetchone()
+        if version is None:
+            raise HTTPException(status_code=404, detail="Project snapshot not found")
+        _insert_version(db, project_id, current["title"], current["document_json"], "Before restore")
+        now = _now()
+        db.execute(
+            "UPDATE projects SET title = ?, document_json = ?, updated_at = ? WHERE id = ?",
+            (version["title"], version["document_json"], now, project_id),
+        )
+        restored = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+    return _record(restored)
+
+
 @router.put("/{project_id}", response_model=ProjectRecord, summary="Rename or replace the document", responses={404: {"description": "Project not found"}})
 def update_project(project_id: str, payload: ProjectUpdate, request: Request) -> ProjectRecord:
     with _connect(request) as db:
@@ -135,6 +199,39 @@ def update_project(project_id: str, payload: ProjectUpdate, request: Request) ->
         )
         updated = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     return _record(updated)
+
+
+def _ensure_versions(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS project_versions (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL, label TEXT NOT NULL,
+        title TEXT NOT NULL, document_json TEXT NOT NULL, created_at TEXT NOT NULL
+    )""")
+
+
+def _version_record(row: sqlite3.Row) -> ProjectVersionRecord:
+    document = json.loads(row["document_json"])
+    scenes = document.get("scenes") if isinstance(document, dict) else []
+    return ProjectVersionRecord(
+        id=row["id"],
+        project_id=row["project_id"],
+        label=row["label"],
+        title=row["title"],
+        scene_count=len(scenes) if isinstance(scenes, list) else 0,
+        created_at=row["created_at"],
+    )
+
+
+def _insert_version(db: sqlite3.Connection, project_id: str, title: str, document_json: str, label: str) -> None:
+    _ensure_versions(db)
+    db.execute(
+        "INSERT INTO project_versions VALUES (?, ?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), project_id, label[:80], title, document_json, _now()),
+    )
+    db.execute(
+        "DELETE FROM project_versions WHERE project_id = ? AND id NOT IN "
+        "(SELECT id FROM project_versions WHERE project_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 30)",
+        (project_id, project_id),
+    )
 
 
 def _assets_root(request: Request) -> Path:
@@ -280,6 +377,8 @@ def delete_project(project_id: str, request: Request) -> None:
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Project not found")
         db.execute("DELETE FROM assets WHERE project_id = ?", (safe_project_id,))
+        _ensure_versions(db)
+        db.execute("DELETE FROM project_versions WHERE project_id = ?", (safe_project_id,))
 
     for media_path in media_paths:
         media_path.unlink(missing_ok=True)

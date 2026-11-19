@@ -2,10 +2,10 @@ import { formatTime, projectSrt } from "../timing";
 import { readingDirection } from "../textDirection";
 import { outputProfile } from "./api";
 import { sceneTemplates } from "./defaults";
-import type { CaptionStyle, Project, Scene } from "./types";
+import type { CaptionStyle, Project, ProjectVersion, Scene } from "./types";
 
 export function ProjectLibrary({
-  fa, projects, project, scenes, openProject, duplicateProject, exportProject, backupProject, deleteProject, importProject, createProject,
+  fa, projects, project, scenes, openProject, duplicateProject, exportProject, backupProject, deleteProject, importProject, createProject, versions, versionsFor, loadVersions, createVersion, restoreVersion,
 }: {
   fa: boolean;
   projects: Project[];
@@ -18,6 +18,11 @@ export function ProjectLibrary({
   deleteProject: (id: string) => void;
   importProject: (file: File | undefined) => void;
   createProject: () => void;
+  versions: ProjectVersion[];
+  versionsFor: string | null;
+  loadVersions: (item: Project) => void;
+  createVersion: (item: Project) => void;
+  restoreVersion: (item: Project, versionId: string) => void;
 }) {
   return <section className="workspace-page">
     <div className="workspace-head"><div><small>PROJECTS</small><h2>{fa ? "پروژه‌های محلی" : "Local projects"}</h2></div><div className="card-actions"><label className="upload-control">{fa ? "ورود ZIP / JSON" : "Import ZIP / JSON"}<input type="file" accept="application/json,.json,application/zip,.zip" onChange={(event) => { void importProject(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><button className="primary" type="button" onClick={() => void createProject()}>{fa ? "پروژه تازه" : "New project"}</button></div></div>
@@ -26,7 +31,7 @@ export function ProjectLibrary({
       const cardScenes = item.id === project?.id ? scenes : (Array.isArray(item.document?.scenes) ? item.document.scenes : []);
       const seconds = cardScenes.reduce((sum, scene) => sum + (Number(scene.duration) || 0), 0);
       const ratio = outputProfile(item.id === project?.id ? project?.document : item.document) === "shorts-1080p" ? "9:16" : "16:9";
-      return <article className={item.id === project?.id ? "studio-card current" : "studio-card"} key={item.id}><b>{item.title}</b><small className="meta">{cardScenes.length} {fa ? "صحنه" : "scenes"} · {formatTime(seconds)} · {ratio}</small><div className="card-actions"><button type="button" onClick={() => void openProject(item)}>{fa ? "باز کردن" : "Open"}</button><button type="button" onClick={() => void duplicateProject(item.id)}>{fa ? "کپی" : "Duplicate"}</button><button type="button" onClick={() => backupProject(item)}>{fa ? "پشتیبان ZIP" : "Backup ZIP"}</button><button type="button" onClick={() => exportProject(item)}>{fa ? "خروجی JSON" : "Export JSON"}</button><button type="button" className="danger" onClick={() => void deleteProject(item.id)}>{fa ? "حذف" : "Delete"}</button></div></article>;
+      return <article className={item.id === project?.id ? "studio-card current" : "studio-card"} key={item.id}><b>{item.title}</b><small className="meta">{cardScenes.length} {fa ? "صحنه" : "scenes"} · {formatTime(seconds)} · {ratio}</small><div className="card-actions"><button type="button" onClick={() => void openProject(item)}>{fa ? "باز کردن" : "Open"}</button><button type="button" onClick={() => void duplicateProject(item.id)}>{fa ? "کپی" : "Duplicate"}</button><button type="button" onClick={() => backupProject(item)}>{fa ? "پشتیبان ZIP" : "Backup ZIP"}</button><button type="button" onClick={() => exportProject(item)}>{fa ? "خروجی JSON" : "Export JSON"}</button><button type="button" onClick={() => createVersion(item)}>{fa ? "ثبت نسخه" : "Save version"}</button><button type="button" onClick={() => loadVersions(item)}>{fa ? "تاریخچه" : "History"}</button><button type="button" className="danger" onClick={() => void deleteProject(item.id)}>{fa ? "حذف" : "Delete"}</button></div>{versionsFor === item.id && <div className="version-history">{versions.length ? versions.map(version => <div key={version.id}><span>{version.label} · {version.scene_count} {fa ? "صحنه" : "scenes"} · {new Date(version.created_at).toLocaleString(fa ? "fa-IR" : "en-US")}</span><button type="button" onClick={() => restoreVersion(item, version.id)}>{fa ? "بازیابی" : "Restore"}</button></div>) : <small>{fa ? "هنوز نسخه‌ای ثبت نشده است." : "No saved versions yet."}</small>}</div>}</article>;
     })}</div>
   </section>;
 }

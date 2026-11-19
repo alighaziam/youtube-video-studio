@@ -3,7 +3,7 @@ import { readingDirection } from "./textDirection";
 import { formatTime, projectSrt, sceneSuggestsDiagram, wordCuesForScene } from "./timing";
 import type {
   DiagramNode, SceneDiagram, SceneLayer, Scene, CaptionStyle,
-  Project, Asset, Voice, CapabilityReport, RenderJob, PublishingPack, Workspace,
+  Project, ProjectVersion, Asset, Voice, CapabilityReport, RenderJob, PublishingPack, Workspace,
 } from "./studio/types";
 import {
   API, starterScenes, makeDefaultDiagram, sceneTemplates,
@@ -24,6 +24,8 @@ export default function App() {
   const [scenes, setScenes] = useState<Scene[]>(starterScenes);
   const [project, setProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [versions, setVersions] = useState<ProjectVersion[]>([]);
+  const [versionsFor, setVersionsFor] = useState<string | null>(null);
   const [nav, setNav] = useState<Workspace>("editor");
   const [capabilities, setCapabilities] = useState<CapabilityReport | null>(null);
   const [status, setStatus] = useState("loading");
@@ -653,6 +655,53 @@ export default function App() {
       setError(reason instanceof Error ? reason.message : (fa ? "تهیه نسخه پشتیبان ناموفق بود." : "Could not create the project backup."));
     }
   };
+  const loadVersions = async (item: Project) => {
+    try {
+      const response = await fetch(API + "/projects/" + item.id + "/versions");
+      if (!response.ok) throw new Error(fa ? "بارگذاری تاریخچه ناموفق بود." : "Could not load version history.");
+      setVersions(await response.json() as ProjectVersion[]);
+      setVersionsFor(item.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : (fa ? "بارگذاری تاریخچه ناموفق بود." : "Could not load version history."));
+    }
+  };
+  const createVersion = async (item: Project) => {
+    try {
+      if (item.id === project?.id && project) {
+        const saved = await fetch(API + "/projects/" + item.id, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ document: { ...project.document, scenes } }),
+        });
+        if (!saved.ok) throw new Error(fa ? "ذخیره پروژه پیش از ثبت نسخه ناموفق بود." : "Could not save before creating a version.");
+      }
+      const response = await fetch(API + "/projects/" + item.id + "/versions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: fa ? "نسخه دستی" : "Manual snapshot" }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? (fa ? "ثبت نسخه ناموفق بود." : "Could not save a version."));
+      }
+      await loadVersions(item);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : (fa ? "ثبت نسخه ناموفق بود." : "Could not save a version."));
+    }
+  };
+  const restoreVersion = async (item: Project, versionId: string) => {
+    const confirmed = window.confirm(fa ? "نسخه انتخاب‌شده جایگزین محتوای فعلی پروژه شود؟ یک نسخه پشتیبان از وضعیت فعلی هم ثبت می‌شود." : "Restore this snapshot over the current project? The current state will first be saved as a snapshot.");
+    if (!confirmed) return;
+    try {
+      const response = await fetch(API + "/projects/" + item.id + "/versions/" + versionId + "/restore", { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail ?? (fa ? "بازیابی نسخه ناموفق بود." : "Could not restore this version."));
+      const restored = body as Project;
+      setProjects((list) => list.map((entry) => entry.id === restored.id ? restored : entry));
+      if (project?.id === restored.id) await openProject(restored, true);
+      await loadVersions(restored);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : (fa ? "بازیابی نسخه ناموفق بود." : "Could not restore this version."));
+    }
+  };
   const importProject = async (file: File | undefined) => {
     if (!file) return;
     try {
@@ -946,7 +995,7 @@ export default function App() {
       <div className="local">● {fa ? "پردازش محلی · بدون فضای ابری" : "Local processing · No cloud"}</div>
     </aside>
     <main className={nav === "editor" ? "main" : "main workspace"}>
-      {nav === "projects" && <ProjectLibrary fa={fa} projects={projects} project={project} scenes={scenes} openProject={openProject} duplicateProject={duplicateProject} exportProject={exportProject} deleteProject={deleteProject} importProject={importProject} backupProject={backupProject} createProject={createProject} />}
+      {nav === "projects" && <ProjectLibrary fa={fa} projects={projects} project={project} scenes={scenes} openProject={openProject} duplicateProject={duplicateProject} exportProject={exportProject} deleteProject={deleteProject} importProject={importProject} backupProject={backupProject} createProject={createProject} versions={versions} versionsFor={versionsFor} loadVersions={loadVersions} createVersion={createVersion} restoreVersion={restoreVersion} />}
       {nav === "templates" && <TemplateLibrary fa={fa} insertTemplate={insertTemplate} />}
       {nav === "captions" && <CaptionPage fa={fa} scenes={scenes} captionStyle={captionStyle} setCaptionStyle={(style) => { void setCaptionStyle(style); }} rememberEdits={rememberEdits} setActive={setActive} setScenes={setScenes} downloadSrt={downloadSrt} />}
       {nav === "editor" && <section className="scenes">
