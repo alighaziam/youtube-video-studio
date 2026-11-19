@@ -53,31 +53,27 @@ The editor can generate per-scene narration locally with Piper, list installed v
 
 ## Project status
 
-Product requirements, UX rules, architecture boundaries, creator workflow, and phased roadmap are documented. The Persian subtitle spike harness is present but still requires execution and manual visual inspection on a supported machine. The current vertical slice includes editable storyboard scenes, SQLite persistence, media upload with content-signature checks, a bounded local render queue, optional local Piper narration, FFmpeg scene composition for attached images/videos, static code/architecture/comparison templates, timed sentence-level captions, 16:9 and 9:16 rendering, output validation and a one-action script-to-MP4 flow when Piper is installed. This is not yet a full multi-layer editor: precise word-level subtitle alignment, Persian visual QA, arbitrary audio import/mixing, timeline editing, generated illustrative artwork, persistent render queues, cancellation/progress streaming, and production-grade publishing automation remain open.
+The current vertical slice includes editable storyboard scenes, SQLite persistence, a local media library, browser microphone recording, per-scene audio waveform preview and trim/gain/fade processing, optional Piper narration, editable captions, a versioned ZIP backup/restore that includes source media, and FFmpeg rendering in 16:9 and 9:16 profiles. Persian subtitle shaping was visually inspected from a reproducible Linux CI render artifact. Rendered scene segments are cached by content fingerprint and validated with ffprobe before reuse.
+
+This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes pixel-level preview/export parity for cross-plane layer z-order, timeline split and snap, precise phoneme alignment, a brand kit and version history, optional local speech-to-text/noise-reduction adapters, and release packaging plus fresh-machine validation on both operating systems. Publishing output remains a draft; nothing is uploaded automatically.
 
 ## Run locally
 
-Requirements: Python 3.11+, Node.js 20+, npm and FFmpeg/ffprobe. Piper plus at least one licensed local voice model is optional and required only for one-action voice production.
+Requirements: Python 3.11+, Node.js 20+, npm, and FFmpeg/ffprobe. Piper plus at least one licensed local voice model is optional.
 
 Linux:
 ```bash
-./scripts/start-dev.sh
-source .venv/bin/activate
-uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+./scripts/run-dev.sh
 ```
 
 Windows PowerShell:
 ```powershell
-.\\scripts\\start-dev.ps1
-.\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+.\\scripts\\run-dev.ps1
 ```
 
-In a second terminal:
-```bash
-npm --prefix frontend run dev
-```
+The scripts create the Python environment if needed, install backend/frontend dependencies, and start the API and editor on loopback addresses. Open http://127.0.0.1:5173. Stop both services with Ctrl+C. If FFmpeg/ffprobe is missing, editing remains available but MP4 rendering will not work. Do not expose the API port to a public network.
 
-Open http://127.0.0.1:5173. Project metadata and the versioned storyboard document are stored in the local SQLite database at `.data/studio.sqlite3`. The current API supports project create/list/read/update/delete. The editor autosaves scene title, type, and duration through the local API. Do not expose the API port to a public network.
+For dependency setup without launching both services, use `scripts/start-dev.sh` or `scripts/start-dev.ps1`. Project metadata and the storyboard are stored in `.data/studio.sqlite3`; source media and render checkpoints stay under `.data/`.
 
 See [the roadmap](docs/roadmap.md) for phase gates.
 

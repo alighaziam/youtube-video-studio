@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate Linux startup scripts
+        run: bash -n scripts/start-dev.sh scripts/run-dev.sh
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
