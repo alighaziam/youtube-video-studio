@@ -1,0 +1,2 @@
+# Optional local speech-to-text. Install only when a compatible model is already available locally.
+faster-whisper>=1.1,<2

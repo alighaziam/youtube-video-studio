@@ -56,6 +56,7 @@ export default function App() {
   const [assetError, setAssetError] = useState("");
   const [recording, setRecording] = useState(false);
   const [recordingError, setRecordingError] = useState("");
+  const [transcribing, setTranscribing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -803,6 +804,23 @@ export default function App() {
     audio.addEventListener("loadedmetadata", () => apply(audio.duration), { once: true });
     audio.addEventListener("error", () => apply(), { once: true });
   };
+  const transcribeVoice = async () => {
+    if (!project || !selected || !selectedVoiceAsset || transcribing) return;
+    setTranscribing(true);
+    setError("");
+    try {
+      const response = await fetch(API + "/projects/" + project.id + "/assets/" + selectedVoiceAsset.id + "/transcribe", { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail ?? (fa ? "رونویسی صدا ناموفق بود." : "Audio transcription failed."));
+      if (!String(body.text ?? "").trim()) throw new Error(fa ? "گفتاری برای رونویسی پیدا نشد." : "No speech was detected in this audio.");
+      rememberEdits();
+      setScenes((items) => items.map((scene) => scene.id === selected.id ? { ...scene, narration: String(body.text).trim() } : scene));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : (fa ? "رونویسی صدا ناموفق بود." : "Audio transcription failed."));
+    } finally {
+      setTranscribing(false);
+    }
+  };
   const startVoiceRecording = async () => {
     if (!selected || recording || assetBusy) return;
     setRecordingError("");
@@ -974,7 +992,7 @@ export default function App() {
       <option value="">{fa ? "بدون صدا" : "No audio"}</option>
       {audioAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
     </select>
-    {selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)} /><AudioWaveform src={assetUrl(selectedVoiceAsset.id)} /><small className="media-limit">{selectedVoiceAsset.name}</small></> : <p className="muted">{fa ? "فایل صوتی را از کتابخانه انتخاب کن، یا با Piper برای همهٔ صحنه‌ها بساز." : "Choose an uploaded audio file, or generate narration with Piper."}</p>}
+    {selectedVoiceAsset ? <><audio className="voice-audio" controls src={assetUrl(selectedVoiceAsset.id)} /><AudioWaveform src={assetUrl(selectedVoiceAsset.id)} /><small className="media-limit">{selectedVoiceAsset.name}</small><button type="button" disabled={transcribing || recording} onClick={() => void transcribeVoice()}>{transcribing ? (fa ? "در حال رونویسی…" : "Transcribing…") : (fa ? "تبدیل گفتار به متن" : "Transcribe audio")}</button></> : <p className="muted">{fa ? "فایل صوتی را از کتابخانه انتخاب کن، یا با Piper برای همهٔ صحنه‌ها بساز." : "Choose an uploaded audio file, or generate narration with Piper."}</p>}
   </>;
 
   return <div className={fa ? "app rtl" : "app ltr"} dir={fa ? "rtl" : "ltr"}>

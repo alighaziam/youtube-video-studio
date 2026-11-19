@@ -5,9 +5,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
+from .transcription import transcribe_audio, whisper_status
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/assets", tags=["assets"])
 ALLOWED_TYPES = {
@@ -156,6 +158,41 @@ def delete_asset(project_id: str, asset_id: str, request: Request) -> None:
         db.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
     path.unlink(missing_ok=True)
 
+
+
+@router.post(
+    "/{asset_id}/transcribe",
+    summary="Transcribe an audio asset with an optional local Whisper model",
+    responses={404: {"description": "Asset not found"}, 415: {"description": "Asset is not audio"}, 503: {"description": "Local Whisper model is not configured"}},
+)
+def transcribe_asset(
+    project_id: str,
+    asset_id: str,
+    request: Request,
+    language: str | None = Query(default=None, min_length=2, max_length=12),
+) -> dict:
+    with sqlite3.connect(_asset_db(request)) as db:
+        _ensure_table(db)
+        row = db.execute(
+            "SELECT mime_type, relative_path FROM assets WHERE id = ? AND project_id = ?",
+            (asset_id, project_id),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not row[0].startswith("audio/"):
+        raise HTTPException(status_code=415, detail="Only audio assets can be transcribed")
+
+    base_dir = Path(getattr(request.app.state, "assets_dir", Path(".data/assets"))).resolve()
+    path = (base_dir / row[1]).resolve()
+    if base_dir not in path.parents or not path.is_file():
+        raise HTTPException(status_code=404, detail="Audio asset file not found")
+    status_info = whisper_status()
+    if not status_info["available"]:
+        raise HTTPException(status_code=503, detail=status_info["reason"])
+    try:
+        return transcribe_audio(path, language=language)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @router.get(
