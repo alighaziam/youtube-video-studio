@@ -228,10 +228,52 @@ def duplicate_project(project_id: str, request: Request) -> ProjectRecord:
     return _record(created)
 
 
-@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a project", responses={404: {"description": "Project not found"}})
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a project and its media", responses={404: {"description": "Project not found"}, 400: {"description": "Invalid project identifier"}})
 def delete_project(project_id: str, request: Request) -> None:
-    """Removes the project row. Media files already on disk are left in place."""
+    """Delete a project and its uploaded media, using canonical UUID path components."""
+    try:
+        safe_project_id = str(uuid.UUID(project_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid project identifier") from None
+    if safe_project_id != project_id.lower():
+        raise HTTPException(status_code=400, detail="Invalid project identifier")
+
+    base_dir = _assets_root(request)
+    project_dir = (base_dir / safe_project_id).resolve()
+    if project_dir.parent != base_dir:
+        raise HTTPException(status_code=400, detail="Invalid project asset path")
+
+    extensions = {
+        "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
+        "video/mp4": ".mp4", "video/webm": ".webm",
+        "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/x-wav": ".wav",
+        "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/ogg": ".ogg",
+    }
+    media_paths: list[Path] = []
     with _connect(request) as db:
-        cursor = db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        _ensure_assets(db)
+        rows = db.execute(
+            "SELECT id, mime_type FROM assets WHERE project_id = ?",
+            (safe_project_id,),
+        ).fetchall()
+        for row in rows:
+            try:
+                safe_asset_id = str(uuid.UUID(row["id"]))
+            except (ValueError, AttributeError):
+                continue
+            extension = extensions.get(row["mime_type"])
+            if extension is None:
+                continue
+            media_path = (project_dir / f"{safe_asset_id}{extension}").resolve()
+            if media_path.parent != project_dir:
+                raise HTTPException(status_code=400, detail="Invalid asset path")
+            media_paths.append(media_path)
+
+        cursor = db.execute("DELETE FROM projects WHERE id = ?", (safe_project_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Project not found")
+        db.execute("DELETE FROM assets WHERE project_id = ?", (safe_project_id,))
+
+    for media_path in media_paths:
+        media_path.unlink(missing_ok=True)
+    shutil.rmtree(project_dir, ignore_errors=True)
