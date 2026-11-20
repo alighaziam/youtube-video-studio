@@ -49,3 +49,9 @@ This is a consistent engineering assessment baseline, not a claim that a single 
 - CodeQL passed on the PR head. The Persian subtitle visual sample was generated and uploaded as the `persian-subtitle-visual-sample` CI artifact.
 - Direct Linux launch now runs Vite without the npm wrapper and the smoke-test cleanup uses a catchable TERM signal to avoid leaving background processes behind.
 - Production readiness remains limited by real Piper execution, full fresh-machine manual validation, visual parity, accessibility/performance, and release packaging.
+
+
+## Latest merged increment — 20 November 2026
+
+- PR #29 merged after CI and CodeQL passed on head `1730ceceb0aa8f83852d46cc05a7e526c44c2ba8`.
+- FFmpeg narration mastering applies `loudnorm` targeting -16 LUFS integrated loudness, -1.5 dBTP true peak, and 11 LU loudness range. Contract tests cover the filter configuration; validation with diverse real-world narration inputs remains a release gate.
