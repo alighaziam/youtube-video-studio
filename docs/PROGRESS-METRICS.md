@@ -63,3 +63,13 @@ This is a consistent engineering assessment baseline, not a claim that a single 
 - The Windows smoke-test cleanup now tolerates an already-exited child process and suppresses the benign `taskkill` message instead of turning a successful API/UI readiness check into a CI failure.
 - YouTube Video Studio CI run 44715453485 passed Windows startup smoke, backend unit/integration and FFmpeg smoke tests, frontend tests/build; CodeQL run 44715453391 passed JavaScript/TypeScript, Python and Actions analyses on the exact PR head.
 - This fixes the false-negative cleanup failure only; fresh-machine manual Windows validation and real Piper model execution remain separate release gates. No overall score increase is claimed.
+
+## Daily repository audit — 20 November 2026
+
+- Audited default branch main at b492dffa83a960219cdf8c5caace3d3fe18f2db6.
+- Latest YouTube Video Studio CI: [run 44716241024](https://github.com/alighaziam/youtube-video-studio/actions/runs/44716241024) — passed.
+- Latest CodeQL: [run 44716240822](https://github.com/alighaziam/youtube-video-studio/actions/runs/44716240822) — passed.
+- No open pull requests were found. PR #30 (Windows smoke cleanup false-failure) and the earlier startup verification PR #27 are merged; do not repeat those fixes.
+- Loudness normalization, project backup/version history, scene split/checkpoint work and Persian subtitle artifact work are already represented in merged history.
+- No progress percentage is changed. Fresh-machine Piper model execution, diverse narration validation, preview/export visual parity, subtitle timing/visual regression, accessibility/performance and release packaging remain open gates. Publishing to YouTube/LinkedIn is not claimed as implemented.
+- The hourly PR Guardian source uses explicit repository context and strict merge gates; scheduled post-update confirmation remains in progress.
