@@ -55,3 +55,11 @@ This is a consistent engineering assessment baseline, not a claim that a single 
 
 - PR #29 merged after CI and CodeQL passed on head `1730ceceb0aa8f83852d46cc05a7e526c44c2ba8`.
 - FFmpeg narration mastering applies `loudnorm` targeting -16 LUFS integrated loudness, -1.5 dBTP true peak, and 11 LU loudness range. Contract tests cover the filter configuration; validation with diverse real-world narration inputs remains a release gate.
+
+
+## Latest merged increment — Windows startup smoke cleanup — 20 November 2026
+
+- PR #30 merged as `59a9c88c72b762ea3023d1edf491f02d48ae78a9` from exact head `f36b55508085198abd8ca74d4d1f0943896df1a2`.
+- The Windows smoke-test cleanup now tolerates an already-exited child process and suppresses the benign `taskkill` message instead of turning a successful API/UI readiness check into a CI failure.
+- YouTube Video Studio CI run 44715453485 passed Windows startup smoke, backend unit/integration and FFmpeg smoke tests, frontend tests/build; CodeQL run 44715453391 passed JavaScript/TypeScript, Python and Actions analyses on the exact PR head.
+- This fixes the false-negative cleanup failure only; fresh-machine manual Windows validation and real Piper model execution remain separate release gates. No overall score increase is claimed.
