@@ -115,6 +115,11 @@ def _scene_layer_filter(scene: dict[str, Any], width: int, height: int, fps: int
     return ";".join(graph), "[vout]"
 
 
+def _audio_mastering_filter() -> str:
+    """Normalize the mixed narration to a consistent online-video loudness target."""
+    return "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=summary"
+
+
 def _ass_time(seconds: float) -> str:
     centiseconds = round(seconds * 100)
     hours, rest = divmod(centiseconds, 360000)
@@ -839,7 +844,7 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                     audio_filters.extend(["aresample=48000", f"adelay={delay_ms}|{delay_ms}", "apad"])
                     filters.append(f"[{index}:a]" + ",".join(audio_filters) + f"[{label}]")
                     labels.append(f"[{label}]")
-                filters.append("".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0,alimiter=limit=0.95[aout]")
+                filters.append("".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0,{_audio_mastering_filter()},alimiter=limit=0.95[aout]")
                 command.extend(["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]", "-c:a", "aac", "-b:a", "192k"])
             else:
                 command.extend(["-map", "0:v:0", "-an"])
