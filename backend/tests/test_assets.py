@@ -96,3 +96,32 @@ def test_browser_recorded_webm_audio_can_be_uploaded_and_downloaded(tmp_path: Pa
     downloaded = client.get(f"/api/v1/projects/{project['id']}/assets/{asset['id']}/file")
     assert downloaded.status_code == 200
     assert downloaded.content == audio_bytes
+
+
+def test_asset_upload_removes_file_when_metadata_insert_fails(tmp_path: Path) -> None:
+    import sqlite3
+
+    db_path = tmp_path / "metadata-failure.sqlite3"
+    app.state.db_path = db_path
+    app.state.assets_dir = tmp_path / "media"
+    project = client.post("/api/v1/projects", json={"title": "Metadata failure", "document": {}}).json()
+
+    with sqlite3.connect(db_path) as db:
+        db.execute("""CREATE TABLE assets (
+            id TEXT PRIMARY KEY, project_id TEXT NOT NULL, original_name TEXT NOT NULL,
+            mime_type TEXT NOT NULL, relative_path TEXT NOT NULL, size_bytes INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+        db.execute("""CREATE TRIGGER reject_asset_metadata BEFORE INSERT ON assets
+            BEGIN SELECT RAISE(ABORT, 'simulated metadata failure'); END""")
+
+    failing_client = TestClient(app, raise_server_exceptions=False)
+    response = failing_client.post(
+        f"/api/v1/projects/{project['id']}/assets",
+        files={"file": ("orphan.png", PNG_FIXTURE, "image/png")},
+    )
+
+    assert response.status_code == 500
+    assert not list((tmp_path / "media").rglob("*.png"))
+    with sqlite3.connect(db_path) as db:
+        assert db.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 0
