@@ -36,6 +36,22 @@ def test_project_crud_persists_versioned_document(tmp_path: Path) -> None:
     assert client.get(f"/api/v1/projects/{project_id}").status_code == 404
 
 
+def test_project_titles_reject_whitespace_only_values(tmp_path: Path) -> None:
+    app.state.db_path = tmp_path / "blank-title.sqlite3"
+
+    created = client.post("/api/v1/projects", json={"title": "   ", "document": {"scenes": []}})
+    assert created.status_code == 422
+
+    valid = client.post("/api/v1/projects", json={"title": "  Valid title  ", "document": {"scenes": []}})
+    assert valid.status_code == 201
+    project_id = valid.json()["id"]
+    assert valid.json()["title"] == "Valid title"
+
+    updated = client.put(f"/api/v1/projects/{project_id}", json={"title": "  \t  "})
+    assert updated.status_code == 422
+    assert client.get(f"/api/v1/projects/{project_id}").json()["title"] == "Valid title"
+
+
 def test_duplicate_copies_storyboard_and_media(tmp_path: Path) -> None:
     app.state.db_path = tmp_path / "copy.sqlite3"
     app.state.assets_dir = tmp_path / "media"
