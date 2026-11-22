@@ -117,13 +117,22 @@ async def upload_asset(project_id: str, request: Request, file: UploadFile = Fil
         await file.close()
 
     relative = target.relative_to(base_dir).as_posix()
-    with sqlite3.connect(db_path) as db:
-        _ensure_table(db)
-        db.execute(
-            "INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (asset_id, project_id, Path(file.filename or "upload").name[:255], mime,
-             relative, size, datetime.now(timezone.utc).isoformat()),
-        )
+    try:
+        with sqlite3.connect(db_path) as db:
+            _ensure_table(db)
+            db.execute(
+                "INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (asset_id, project_id, Path(file.filename or "upload").name[:255], mime,
+                 relative, size, datetime.now(timezone.utc).isoformat()),
+            )
+    except Exception:
+        # The file is already in its final location; do not leave an untracked
+        # orphan if the metadata transaction cannot be committed.
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     return AssetRecord(id=asset_id, project_id=project_id, name=Path(file.filename or "upload").name,
                         mime_type=mime, relative_path=relative, size_bytes=size)
 
