@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .assets import ALLOWED_TYPES, _matches_media_signature
 
@@ -68,10 +68,28 @@ class ProjectCreate(BaseModel):
         description="سند استوری‌بورد: schemaVersion، profile، language و scenes.",
     )
 
+    @field_validator("title")
+    @classmethod
+    def title_must_contain_non_whitespace(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Project title must contain at least one non-whitespace character")
+        return normalized
+
 
 class ProjectUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=160, description="نام تازه. اگر نفرستید، نام فعلی می‌ماند.")
     document: dict[str, Any] | None = Field(default=None, description="جایگزین کامل سند. فیلد نفرستاده‌شده پاک نمی‌شود مگر اینکه document را بفرستید.")
+
+    @field_validator("title")
+    @classmethod
+    def title_must_contain_non_whitespace(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Project title must contain at least one non-whitespace character")
+        return normalized
 
 
 class ProjectRecord(BaseModel):
