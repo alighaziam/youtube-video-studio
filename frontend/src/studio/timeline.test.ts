@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { splitSceneAt } from "./timeline";
+import { adjacentSceneId, splitSceneAt } from "./timeline";
 import type { Scene } from "./types";
 
 const scene: Scene = {
@@ -73,5 +73,25 @@ describe("splitSceneAt", () => {
     expect(splitSceneAt(scene, 0, "Part 2")).toBeNull();
     expect(splitSceneAt(scene, 10, "Part 2")).toBeNull();
     expect(splitSceneAt(scene, 12, "Part 2")).toBeNull();
+  });
+});
+
+
+describe("adjacentSceneId", () => {
+  const scenes: Scene[] = [
+    { ...scene, id: "first" },
+    { ...scene, id: "middle" },
+    { ...scene, id: "last" },
+  ];
+
+  it("returns the previous or next scene for keyboard reordering", () => {
+    expect(adjacentSceneId(scenes, "middle", -1)).toBe("first");
+    expect(adjacentSceneId(scenes, "middle", 1)).toBe("last");
+  });
+
+  it("does not move beyond either end or for an unknown scene", () => {
+    expect(adjacentSceneId(scenes, "first", -1)).toBeUndefined();
+    expect(adjacentSceneId(scenes, "last", 1)).toBeUndefined();
+    expect(adjacentSceneId(scenes, "missing", 1)).toBeUndefined();
   });
 });
