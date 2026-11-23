@@ -157,7 +157,7 @@ def _normalize_scene_layers(raw_layers: Any) -> list[dict[str, Any]]:
             "zIndex": int(number("zIndex", index + 1, 0, 1000)),
             "opacity": number("opacity", 1, 0, 1), "visible": bool(raw.get("visible", True)),
             "content": str(raw.get("content", ""))[:6000], "assetId": str(raw.get("assetId", ""))[:128],
-            "shapeKind": raw.get("shapeKind") if raw.get("shapeKind") in {"rectangle", "ellipse"} else "rectangle",
+            "shapeKind": raw.get("shapeKind") if raw.get("shapeKind") in {"rectangle", "ellipse", "line", "arrow"} else "rectangle",
             "fillColor": raw.get("fillColor") if isinstance(raw.get("fillColor"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", raw.get("fillColor", "")) else "#7187ff",
             "strokeColor": raw.get("strokeColor") if isinstance(raw.get("strokeColor"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", raw.get("strokeColor", "")) else "#dbeafe",
             "strokeWidth": number("strokeWidth", 2, 0, 20),
@@ -354,7 +354,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 stroke = _ass_bgr(layer["strokeColor"], "#dbeafe")
                 alpha = round((1 - layer["opacity"]) * 255)
                 border = layer["strokeWidth"]
-                if layer["shapeKind"] == "ellipse":
+                if layer["shapeKind"] == "line":
+                    path = f"m 0 {shape_height / 2:.2f} l {shape_width} {shape_height / 2:.2f}"
+                elif layer["shapeKind"] == "arrow":
+                    center_y = shape_height / 2
+                    head = max(4, min(shape_width * 0.25, shape_height * 0.45))
+                    path = (f"m 0 {center_y:.2f} l {shape_width-head:.2f} {center_y:.2f} "
+                            f"m {shape_width-head:.2f} {center_y-head:.2f} l {shape_width} {center_y:.2f} "
+                            f"l {shape_width-head:.2f} {center_y+head:.2f}")
+                elif layer["shapeKind"] == "ellipse":
                     cx, cy = shape_width / 2, shape_height / 2
                     kx, ky = cx * 0.55228475, cy * 0.55228475
                     path = (f"m {cx:.2f} 0 b {cx+kx:.2f} 0 {shape_width:.2f} {cy-ky:.2f} {shape_width:.2f} {cy:.2f} "
@@ -366,9 +374,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 x = int(width * layer["x"] / 100)
                 y = int(height * layer["y"] / 100)
                 slash = chr(92)
+                fill_alpha = "FF" if layer["shapeKind"] in {"line", "arrow"} else f"{alpha:02X}"
                 override = (slash + "an7" + slash + f"pos({x},{y})" + slash + "p1" + slash + f"bord{border:g}"
                             + slash + "shad0" + slash + f"1c&H{fill}&" + slash + f"3c&H{stroke}&"
-                            + slash + f"1a&H{alpha:02X}&" + slash + f"3a&H{alpha:02X}&")
+                            + slash + f"1a&H{fill_alpha}&" + slash + f"3a&H{alpha:02X}&")
                 reset = slash + "p0"
                 events.append(f"Dialogue: {event_layer},{_ass_time(cursor)},{_ass_time(cursor + duration)},LayerText,,0,0,0,,{{{override}}}{path}{{{reset}}}")
                 continue
