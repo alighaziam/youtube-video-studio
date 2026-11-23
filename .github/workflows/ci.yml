@@ -122,6 +122,27 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+  release-package:
+    name: Reproducible source release package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Build source archive
+        run: python scripts/package_release.py --output-dir "$RUNNER_TEMP/release"
+      - name: Upload source release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-video-studio-source-release
+          path: ${{ runner.temp }}/release/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
   windows-startup:
     name: Windows one-command startup smoke
     runs-on: windows-latest
