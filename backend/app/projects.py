@@ -368,7 +368,8 @@ def delete_project(project_id: str, request: Request) -> None:
     extensions = {
         "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
         "video/mp4": ".mp4", "video/webm": ".webm",
-        "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/x-wav": ".wav",
+        "audio/webm": ".webm", "audio/mpeg": ".mp3",
+        "audio/wav": ".wav", "audio/x-wav": ".wav",
         "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/ogg": ".ogg",
     }
     media_paths: list[Path] = []
