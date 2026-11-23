@@ -19,7 +19,15 @@ def test_ffmpeg_render_creates_valid_mp4(tmp_path: Path) -> None:
         db.execute("CREATE TABLE projects (id TEXT PRIMARY KEY, title TEXT, document_json TEXT, created_at TEXT, updated_at TEXT)")
         db.execute(
             "INSERT INTO projects VALUES (?, ?, ?, ?, ?)",
-            (project_id, "Render smoke test", json.dumps({"scenes": [{"title": "Hello video", "duration": 1}]}), "now", "now"),
+            (project_id, "Render smoke test", json.dumps({"scenes": [{
+                "title": "Hello video", "duration": 1,
+                "layers": [
+                    {"id": "rect", "type": "shape", "shapeKind": "rectangle", "x": 8, "y": 12, "width": 30, "height": 24,
+                     "fillColor": "#7187ff", "strokeColor": "#dbeafe", "strokeWidth": 3, "opacity": 0.9, "zIndex": 1, "visible": True},
+                    {"id": "ellipse", "type": "shape", "shapeKind": "ellipse", "x": 55, "y": 45, "width": 22, "height": 30,
+                     "fillColor": "#22aa88", "strokeColor": "#ffffff", "strokeWidth": 2, "opacity": 1, "zIndex": 2, "visible": True},
+                ],
+            }]}), "now", "now"),
         )
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {"id": job_id, "status": "queued"}
