@@ -39,6 +39,7 @@ The product is designed for creators who want professional motion-slide videos w
 - [Creator workflow](docs/creator-workflow.md)
 - [Implementation roadmap](docs/roadmap.md)
 - [Persian subtitle rendering spike](docs/technical-spike-persian-subtitles.md)
+- [Source release packaging](docs/release-packaging.md)
 
 ## Local voice-over
 
@@ -86,3 +87,14 @@ The React entry component no longer owns shared domain types, starter scene data
 - `api.ts`: startup-project loading and output-profile serialization.
 
 The next UI refactor should move editor state into focused hooks and extract timeline, preview, inspector and project-library components without changing the existing editor behavior.
+
+
+### Reproducible source release
+
+Create a source-only ZIP with a SHA-256 manifest using:
+
+```bash
+python scripts/package_release.py
+```
+
+The archive excludes local databases, virtual environments, dependency folders, generated artifacts, logs, and private key files. It does not bundle Python or Node dependencies; the included launch scripts install dependencies from the checked-in manifests.
