@@ -54,9 +54,11 @@ The editor can generate per-scene narration locally with Piper, list installed v
 
 ## Project status
 
-The current vertical slice includes editable storyboard scenes, SQLite persistence, a local media library, browser microphone recording, per-scene audio waveform preview and trim/gain/fade processing, optional Piper narration, editable captions, a versioned ZIP backup/restore that includes source media, and FFmpeg rendering in 16:9 and 9:16 profiles. Persian subtitle shaping was visually inspected from a reproducible Linux CI render artifact. Rendered scene segments are cached by content fingerprint and validated with ffprobe before reuse.
+The current implementation includes SQLite project persistence, autosave and versioned ZIP backup/restore with source media; a local media library; browser microphone recording and waveform-based audio trim/gain/fade; optional local Piper narration and Whisper transcription; editable SRT/VTT captions; 16:9 and 9:16 FFmpeg rendering; reusable render checkpoints; project publishing-pack export; and a multi-layer scene editor with image/video/text/code/diagram layers plus editable rectangle, ellipse, line and arrow shapes. The timeline supports scene reordering, duration editing, split/snap behavior and keyboard navigation. Source-only release packaging produces a SHA-256 manifest.
 
-This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes exact pixel-level parity for typography/video decoding, shape/SVG layers, precise phoneme alignment, a brand kit, and release packaging plus fresh-machine validation on both operating systems. Publishing output remains a draft; nothing is uploaded automatically.
+CI on the current main commit verifies backend unit/integration and FFmpeg smoke tests, frontend unit tests and production build, source packaging, and Windows one-command startup smoke. CodeQL covers Python, JavaScript/TypeScript and GitHub Actions. These automated checks do not replace clean-machine manual validation.
+
+This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes SVG asset layers, a reusable brand kit, phoneme-level caption alignment, exact preview/export parity and visual regression coverage, performance/accessibility review beyond the timeline, and fresh-machine validation with real local speech models. Publishing output remains a draft; nothing is uploaded automatically.
 
 ## Run locally
 
