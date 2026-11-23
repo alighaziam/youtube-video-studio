@@ -20,6 +20,72 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["rendering"])
+# Checkpoint cache is an optimization, never the source of truth. Keep it bounded
+# so repeated edits/renders cannot grow the local data directory indefinitely.
+_CHECKPOINT_LOCK = threading.Lock()
+_CHECKPOINT_MAX_BYTES = 2 * 1024 * 1024 * 1024
+_CHECKPOINT_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+_CHECKPOINT_TEMP_MAX_AGE_SECONDS = 24 * 60 * 60
+
+
+def _prune_segment_checkpoints(
+    checkpoint_dir: Path,
+    *,
+    max_bytes: int = _CHECKPOINT_MAX_BYTES,
+    max_age_seconds: int = _CHECKPOINT_MAX_AGE_SECONDS,
+    temp_max_age_seconds: int = _CHECKPOINT_TEMP_MAX_AGE_SECONDS,
+    now: float | None = None,
+) -> dict[str, int]:
+    """Bound the reusable render cache by age and size without touching final MP4s."""
+    if not checkpoint_dir.is_dir():
+        return {"removed_files": 0, "removed_bytes": 0, "remaining_bytes": 0}
+    current_time = datetime.now(timezone.utc).timestamp() if now is None else now
+    removed_files = 0
+    removed_bytes = 0
+    with _CHECKPOINT_LOCK:
+        checkpoints: list[tuple[Path, int, float]] = []
+        for path in checkpoint_dir.iterdir():
+            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                stat = path.stat()
+                age = max(0.0, current_time - stat.st_mtime)
+                # Interrupted atomic writes are disposable after one day.
+                if path.name.startswith(".") and path.name.endswith(".tmp.mp4"):
+                    if age > temp_max_age_seconds:
+                        path.unlink(missing_ok=True)
+                        removed_files += 1
+                        removed_bytes += stat.st_size
+                    continue
+                if path.suffix.lower() != ".mp4" or path.name.startswith("."):
+                    continue
+                if age > max_age_seconds:
+                    path.unlink(missing_ok=True)
+                    removed_files += 1
+                    removed_bytes += stat.st_size
+                    continue
+                checkpoints.append((path, stat.st_size, stat.st_mtime))
+            except OSError:
+                # A concurrently removed or inaccessible cache entry is harmless.
+                continue
+        remaining_bytes = sum(size for _, size, _ in checkpoints)
+        for path, size, _modified in sorted(checkpoints, key=lambda item: item[2]):
+            if remaining_bytes <= max_bytes:
+                break
+            try:
+                path.unlink(missing_ok=True)
+                remaining_bytes -= size
+                removed_files += 1
+                removed_bytes += size
+            except OSError:
+                continue
+    return {
+        "removed_files": removed_files,
+        "removed_bytes": removed_bytes,
+        "remaining_bytes": max(0, remaining_bytes),
+    }
+
+
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
 _cancelled_jobs: set[str] = set()
@@ -765,11 +831,17 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 checkpoint_dir = target_dir / ".segment-checkpoints"
                 checkpoint_dir.mkdir(parents=True, exist_ok=True)
                 checkpoint = checkpoint_dir / f"{cache_key}.mp4"
-                if _cached_segment_is_valid(checkpoint, ffprobe, width, height, duration):
-                    shutil.copy2(checkpoint, segment)
+                with _CHECKPOINT_LOCK:
+                    cache_hit = _cached_segment_is_valid(checkpoint, ffprobe, width, height, duration)
+                    if cache_hit:
+                        shutil.copy2(checkpoint, segment)
+                        # Refresh LRU age only after the cached file passed ffprobe.
+                        os.utime(checkpoint, None)
+                    else:
+                        checkpoint.unlink(missing_ok=True)
+                if cache_hit:
                     segment_paths.append(segment)
                     continue
-                checkpoint.unlink(missing_ok=True)
                 for layer, layer_path in layer_inputs:
                     if layer["type"] == "image":
                         input_args.extend(["-loop", "1", "-framerate", str(fps), "-i", str(layer_path)])
@@ -796,8 +868,9 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 if not _cached_segment_is_valid(segment, ffprobe, width, height, duration):
                     raise RuntimeError(f"Rendered scene {index + 1} failed checkpoint validation.")
                 temporary_checkpoint = checkpoint_dir / f".{cache_key}.{job_id}.tmp.mp4"
-                shutil.copy2(segment, temporary_checkpoint)
-                os.replace(temporary_checkpoint, checkpoint)
+                with _CHECKPOINT_LOCK:
+                    shutil.copy2(segment, temporary_checkpoint)
+                    os.replace(temporary_checkpoint, checkpoint)
                 segment_paths.append(segment)
             _set_job(job_id, progress=82)
             concat_file = temp_dir / "scenes.txt"
@@ -871,6 +944,7 @@ def _render_job(job_id: str, db_path: str, output_dir: str, project_id: str, pro
                 raise RuntimeError("Generated narration was not present in the final MP4.")
             shutil.move(temporary_output, final_path)
             duration = float(metadata.get("format", {}).get("duration", total_duration))
+        _prune_segment_checkpoints(target_dir / ".segment-checkpoints")
         _set_job(job_id, status="completed", output_path=str(final_path), duration_seconds=duration,
                  width=width, height=height, error=None, progress=100)
     except RenderCancelled:
