@@ -14,7 +14,7 @@ The product is designed for creators who want professional motion-slide videos w
 
 - Local-first: no mandatory cloud service, paid API, account, or API key.
 - Persian RTL and English LTR support, including mixed-language captions and code.
-- Professional, reusable scene templates and brand kit.
+- Professional, reusable scene templates; a reusable project-wide brand kit is still on the roadmap.
 - Static content stays static: no automatic zoom, pan, camera drift, or scaling.
 - Motion is explicit and intentional: reveal, highlight, fade, slide, and diagram sequencing.
 - FFmpeg is the rendering engine; capabilities are detected rather than assumed.
@@ -25,10 +25,10 @@ The product is designed for creators who want professional motion-slide videos w
 
 1. Create a YouTube 16:9 or Shorts 9:16 project.
 2. Write a lesson script and split it into scenes.
-3. Optionally attach an image/video to each scene; automatic static layouts are provided for concept, code, comparison and architecture scenes.
-4. Select an installed Piper voice and generate local narration for all scenes.
-5. Generate readable timed caption chunks automatically.
-6. Render MP4 locally with scene visuals and narration, then validate the output.
+3. Add media, code, editable diagrams, and vector shapes to scenes.
+4. Record narration in the browser, import audio, or optionally use a locally installed Piper voice.
+5. Edit captions or use optional local Whisper transcription.
+6. Arrange scenes and layers, then preview and render MP4 locally with FFmpeg.
 7. Export an editable YouTube publishing pack.
 
 ## Documentation
@@ -40,6 +40,8 @@ The product is designed for creators who want professional motion-slide videos w
 - [Implementation roadmap](docs/roadmap.md)
 - [Persian subtitle rendering spike](docs/technical-spike-persian-subtitles.md)
 - [Source release packaging](docs/release-packaging.md)
+- [Current implementation status](docs/current-status.md)
+- [Progress assessment rubric](docs/PROGRESS-METRICS.md)
 
 ## Local voice-over
 
@@ -54,9 +56,11 @@ The editor can generate per-scene narration locally with Piper, list installed v
 
 ## Project status
 
-The current vertical slice includes editable storyboard scenes, SQLite persistence, a local media library, browser microphone recording, per-scene audio waveform preview and trim/gain/fade processing, optional Piper narration, editable captions, a versioned ZIP backup/restore that includes source media, and FFmpeg rendering in 16:9 and 9:16 profiles. Persian subtitle shaping was visually inspected from a reproducible Linux CI render artifact. Rendered scene segments are cached by content fingerprint and validated with ffprobe before reuse.
+The current implementation includes SQLite project persistence, autosave and versioned ZIP backup/restore with source media; a local media library; browser microphone recording and waveform-based audio trim/gain/fade; optional local Piper narration and Whisper transcription; editable SRT/VTT captions; 16:9 and 9:16 FFmpeg rendering; reusable render checkpoints; project publishing-pack export; and a multi-layer scene editor with image/video/text/code/diagram layers plus editable rectangle, ellipse, line and arrow shapes. The timeline supports scene reordering, duration editing, split/snap behavior and keyboard navigation. Source-only release packaging produces a SHA-256 manifest.
 
-This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes exact pixel-level parity for typography/video decoding, shape/SVG layers, precise phoneme alignment, a brand kit, and release packaging plus fresh-machine validation on both operating systems. Publishing output remains a draft; nothing is uploaded automatically.
+CI on the current main commit verifies backend unit/integration and FFmpeg smoke tests, frontend unit tests and production build, source packaging, and Windows one-command startup smoke. CodeQL covers Python, JavaScript/TypeScript and GitHub Actions. These automated checks do not replace clean-machine manual validation.
+
+This is still an actively developed local studio, not a finished commercial NLE. Remaining work includes SVG asset layers, a reusable brand kit, phoneme-level caption alignment, exact preview/export parity and visual regression coverage, performance/accessibility review beyond the timeline, and fresh-machine validation with real local speech models. Publishing output remains a draft; nothing is uploaded automatically.
 
 ## Run locally
 
@@ -78,7 +82,6 @@ For dependency setup without launching both services, use `scripts/start-dev.sh`
 
 See [the roadmap](docs/roadmap.md) for phase gates.
 
-
 ### Frontend module boundaries
 
 The React entry component no longer owns shared domain types, starter scene data, editor defaults or startup-project loading. These are isolated under `frontend/src/studio/`:
@@ -87,7 +90,6 @@ The React entry component no longer owns shared domain types, starter scene data
 - `api.ts`: startup-project loading and output-profile serialization.
 
 The next UI refactor should move editor state into focused hooks and extract timeline, preview, inspector and project-library components without changing the existing editor behavior.
-
 
 ### Reproducible source release
 
