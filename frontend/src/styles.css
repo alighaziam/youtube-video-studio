@@ -226,3 +226,10 @@ body{font-size:14px;background:#090e1c}
 .canvas-layer{cursor:grab;touch-action:none}
 .canvas-layer.selected{cursor:grabbing}
 .canvas-layer .layer-resize-handle{cursor:nwse-resize;touch-action:none}
+
+
+/* Timeline clips are keyboard-operable scene controls. */
+.timeline .clip{cursor:grab;touch-action:manipulation}
+.timeline .clip:focus-visible{position:relative;z-index:4;outline:3px solid #d3cfff;outline-offset:3px;box-shadow:0 0 0 5px #7c74fa55}
+.timeline .clip-resize{cursor:ew-resize}
+@media(prefers-reduced-motion:reduce){.canvas-stage.is-fade .slide,.canvas-stage.is-fade .canvas-base-media{animation:none}}
