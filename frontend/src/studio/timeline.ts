@@ -58,3 +58,10 @@ export function splitSceneAt(
   }
   return [first, second];
 }
+
+/** Return the neighboring scene id for keyboard timeline reordering. */
+export function adjacentSceneId(scenes: Scene[], currentId: string, direction: -1 | 1): string | undefined {
+  const index = scenes.findIndex((scene) => scene.id === currentId);
+  if (index < 0) return undefined;
+  return scenes[index + direction]?.id;
+}
