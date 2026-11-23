@@ -231,6 +231,34 @@ def test_ass_renders_visible_text_and_code_layers_with_layer_positions() -> None
 
 
 
+def test_ass_renders_editable_rectangle_and_ellipse_shape_layers() -> None:
+    from app.rendering import _normalize_scene_layers
+
+    normalized = _normalize_scene_layers([
+        {"id": "rect", "type": "shape", "shapeKind": "rectangle", "x": 10, "y": 20, "width": 30, "height": 40,
+         "fillColor": "#112233", "strokeColor": "#AABBCC", "strokeWidth": 3, "opacity": 0.5, "zIndex": 2},
+        {"id": "ellipse", "type": "shape", "shapeKind": "ellipse", "x": 55, "y": 25, "width": 20, "height": 30,
+         "fillColor": "invalid", "strokeColor": "#ffffff", "strokeWidth": 99, "opacity": 1, "zIndex": 3},
+    ])
+    assert normalized[0]["fillColor"] == "#112233"
+    assert normalized[1]["fillColor"] == "#7187ff"
+    assert normalized[1]["strokeWidth"] == 20
+
+    result = _build_ass([{
+        "title": "Shapes", "duration": 5,
+        "layers": [
+            {"id": "rect", "type": "shape", "shapeKind": "rectangle", "x": 10, "y": 20, "width": 30, "height": 40,
+             "fillColor": "#112233", "strokeColor": "#AABBCC", "strokeWidth": 3, "opacity": 0.5, "zIndex": 2, "visible": True},
+            {"id": "ellipse", "type": "shape", "shapeKind": "ellipse", "x": 55, "y": 25, "width": 20, "height": 30,
+             "fillColor": "#ff0000", "strokeColor": "#ffffff", "strokeWidth": 1, "opacity": 1, "zIndex": 3, "visible": True},
+        ],
+    }], 1920, 1080)
+    assert r"pos(192,216)" in result
+    assert r"1c&H332211&" in result and r"3c&HCCBBAA&" in result
+    assert r"1a&H80&" in result
+    assert "b 576.00" in result
+
+
 def test_scene_layer_filter_composites_media_in_z_order() -> None:
     from pathlib import Path
     from app.rendering import _normalize_scene_layers, _scene_layer_filter
