@@ -74,3 +74,11 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 
 ## Definition of done
 A feature is complete only when implementation, automated tests, user-facing documentation, and a reproducible manual check exist. A commit alone does not mean a phase is complete.
+
+
+## Latest verified increment — 23 November 2026
+- Project deletion now removes browser-recorded WebM audio files and their metadata.
+- Render checkpoint storage is bounded by a 30-day age limit and 2 GiB LRU cap; abandoned temporary checkpoint files older than 24 hours are removed after successful renders.
+- A reproducible source-only ZIP with SHA-256 manifest is generated as a CI artifact.
+- Canvas shape layers support rectangles, ellipses, lines, and arrows in both preview and FFmpeg export. The real MP4 smoke fixture exercises all four variants.
+- Main commit `eee8e260929dc634617055722e3d1a0c8ad47433` passed CI run 45120487027 and CodeQL run 45120487002.
