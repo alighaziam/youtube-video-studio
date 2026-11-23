@@ -239,10 +239,13 @@ def test_ass_renders_editable_rectangle_and_ellipse_shape_layers() -> None:
          "fillColor": "#112233", "strokeColor": "#AABBCC", "strokeWidth": 3, "opacity": 0.5, "zIndex": 2},
         {"id": "ellipse", "type": "shape", "shapeKind": "ellipse", "x": 55, "y": 25, "width": 20, "height": 30,
          "fillColor": "invalid", "strokeColor": "#ffffff", "strokeWidth": 99, "opacity": 1, "zIndex": 3},
+        {"id": "arrow", "type": "shape", "shapeKind": "arrow", "x": 20, "y": 70, "width": 40, "height": 12,
+         "fillColor": "#000000", "strokeColor": "#00ff00", "strokeWidth": 2, "opacity": 1, "zIndex": 4},
     ])
     assert normalized[0]["fillColor"] == "#112233"
     assert normalized[1]["fillColor"] == "#7187ff"
     assert normalized[1]["strokeWidth"] == 20
+    assert normalized[2]["shapeKind"] == "arrow"
 
     result = _build_ass([{
         "title": "Shapes", "duration": 5,
@@ -251,12 +254,19 @@ def test_ass_renders_editable_rectangle_and_ellipse_shape_layers() -> None:
              "fillColor": "#112233", "strokeColor": "#AABBCC", "strokeWidth": 3, "opacity": 0.5, "zIndex": 2, "visible": True},
             {"id": "ellipse", "type": "shape", "shapeKind": "ellipse", "x": 55, "y": 25, "width": 20, "height": 30,
              "fillColor": "#ff0000", "strokeColor": "#ffffff", "strokeWidth": 1, "opacity": 1, "zIndex": 3, "visible": True},
+            {"id": "line", "type": "shape", "shapeKind": "line", "x": 10, "y": 80, "width": 40, "height": 10,
+             "fillColor": "#000000", "strokeColor": "#ffffff", "strokeWidth": 2, "opacity": 1, "zIndex": 4, "visible": True},
+            {"id": "arrow", "type": "shape", "shapeKind": "arrow", "x": 55, "y": 80, "width": 30, "height": 12,
+             "fillColor": "#000000", "strokeColor": "#00ff00", "strokeWidth": 2, "opacity": 1, "zIndex": 5, "visible": True},
         ],
     }], 1920, 1080)
     assert r"pos(192,216)" in result
     assert r"1c&H332211&" in result and r"3c&HCCBBAA&" in result
     assert r"1a&H80&" in result
     assert "384.00" in result
+    assert r"1a&HFF&" in result
+    assert "l 768 486.00" in result
+    assert "l 1632 972.00" in result
 
 
 def test_scene_layer_filter_composites_media_in_z_order() -> None:
