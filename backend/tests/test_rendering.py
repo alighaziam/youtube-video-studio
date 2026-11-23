@@ -231,7 +231,7 @@ def test_ass_renders_visible_text_and_code_layers_with_layer_positions() -> None
 
 
 
-def test_ass_renders_editable_rectangle_and_ellipse_shape_layers() -> None:
+def test_ass_renders_editable_rectangle_ellipse_line_and_arrow_shape_layers() -> None:
     from app.rendering import _normalize_scene_layers
 
     normalized = _normalize_scene_layers([
