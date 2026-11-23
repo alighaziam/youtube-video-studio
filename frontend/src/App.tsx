@@ -1071,9 +1071,13 @@ export default function App() {
               {layer.type==="code" && <pre>{layer.content}</pre>}
               {layer.type==="diagram" && <span className="layer-diagram">{layer.content}</span>}
               {layer.type==="shape" && <svg viewBox="0 0 100 100" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
-                {(layer.shapeKind ?? "rectangle") === "ellipse"
-                  ? <ellipse cx="50" cy="50" rx="48" ry="48" fill={layer.fillColor ?? "#7187ff"} stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>
-                  : <rect x="1" y="1" width="98" height="98" rx="3" fill={layer.fillColor ?? "#7187ff"} stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>}
+                {(layer.shapeKind ?? "rectangle") === "line"
+                  ? <line x1="0" y1="50" x2="100" y2="50" stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>
+                  : layer.shapeKind === "arrow"
+                    ? <path d="M 0 50 H 78 M 68 30 L 98 50 L 68 70" fill="none" stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+                    : layer.shapeKind === "ellipse"
+                      ? <ellipse cx="50" cy="50" rx="48" ry="48" fill={layer.fillColor ?? "#7187ff"} stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>
+                      : <rect x="1" y="1" width="98" height="98" rx="3" fill={layer.fillColor ?? "#7187ff"} stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>}
               </svg>}
               <i className="layer-resize" onPointerDown={(event) => dragLayer(event, layer, "resize")} />
             </div>;

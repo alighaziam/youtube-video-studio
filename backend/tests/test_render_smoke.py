@@ -26,6 +26,10 @@ def test_ffmpeg_render_creates_valid_mp4(tmp_path: Path) -> None:
                      "fillColor": "#7187ff", "strokeColor": "#dbeafe", "strokeWidth": 3, "opacity": 0.9, "zIndex": 1, "visible": True},
                     {"id": "ellipse", "type": "shape", "shapeKind": "ellipse", "x": 55, "y": 45, "width": 22, "height": 30,
                      "fillColor": "#22aa88", "strokeColor": "#ffffff", "strokeWidth": 2, "opacity": 1, "zIndex": 2, "visible": True},
+                    {"id": "line", "type": "shape", "shapeKind": "line", "x": 10, "y": 80, "width": 35, "height": 8,
+                     "strokeColor": "#ffffff", "strokeWidth": 2, "opacity": 1, "zIndex": 3, "visible": True},
+                    {"id": "arrow", "type": "shape", "shapeKind": "arrow", "x": 55, "y": 80, "width": 30, "height": 10,
+                     "strokeColor": "#22aa88", "strokeWidth": 3, "opacity": 1, "zIndex": 4, "visible": True},
                 ],
             }]}), "now", "now"),
         )
