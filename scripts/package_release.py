@@ -27,8 +27,14 @@ _EXCLUDED_NAMES = {
 _INCLUDED_ENV_EXAMPLES = {".env.example", ".env.sample"}
 
 
-def _is_release_file(path: Path, root: Path) -> bool:
+def _is_release_file(path: Path, root: Path, output_dir: Path) -> bool:
     relative = path.relative_to(root)
+    try:
+        output_relative = output_dir.relative_to(root)
+        if output_relative.parts and relative.parts[:len(output_relative.parts)] == output_relative.parts:
+            return False
+    except ValueError:
+        pass
     if any(part in _EXCLUDED_DIRS for part in relative.parts):
         return False
     name = path.name.lower()
@@ -62,7 +68,7 @@ def create_release_archive(root: Path, output_dir: Path) -> Path:
     top_level = f"youtube-video-studio-{version}"
 
     files = sorted(
-        (path for path in root.rglob("*") if _is_release_file(path, root)),
+        (path for path in root.rglob("*") if _is_release_file(path, root, output_dir)),
         key=lambda path: path.relative_to(root).as_posix(),
     )
     if not files:
