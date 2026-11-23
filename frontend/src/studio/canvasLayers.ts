@@ -10,7 +10,7 @@ export function orderPreviewLayers(layers: SceneLayer[]): SceneLayer[] {
     .filter((layer) => layer.type === "image" || layer.type === "video")
     .sort((a, b) => a.zIndex - b.zIndex);
   const overlays = visible
-    .filter((layer) => layer.type === "text" || layer.type === "code" || layer.type === "diagram")
+    .filter((layer) => layer.type === "text" || layer.type === "code" || layer.type === "diagram" || layer.type === "shape")
     .sort((a, b) => a.zIndex - b.zIndex);
   return [...media, ...overlays].map((layer, index) => ({ ...layer, zIndex: index + 1 }));
 }
