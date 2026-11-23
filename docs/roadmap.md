@@ -68,7 +68,8 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 ## Phase 7 — Hardening
 - Windows/Linux setup and one-command launch scripts, troubleshooting docs, media-inclusive backup/restore, path validation, and CodeQL checks are implemented.
 - Implemented: cached scene checkpoints are pruned after successful renders using a 30-day age limit and a 2 GiB LRU size cap; interrupted temporary checkpoint writes older than 24 hours are removed. Final rendered MP4s are never part of this cache cleanup.
-- Remaining: fresh-machine validation on both OSes, accessibility/performance pass, and release packaging.
+- Implemented: a deterministic source-only ZIP release builder with SHA-256 manifest, runtime/cache/secret exclusions, and a CI artifact.
+- Remaining: fresh-machine validation on both OSes and accessibility/performance pass.
 - Gate: clean setup on Windows and Linux plus an end-to-end sample project.
 
 ## Definition of done
