@@ -46,6 +46,7 @@ def test_source_release_is_reproducible_and_excludes_local_secrets_and_runtime_d
         assert prefix + ".env.example" in names
         assert prefix + "SHA256SUMS.txt" in names
         assert not any("release-out/" in name for name in names)
+        assert not any(name.endswith("-source.zip") for name in names)
         assert not any(".env" in name and not name.endswith(".env.example") for name in names)
         assert not any(".data/" in name or ".venv/" in name or "node_modules/" in name for name in names)
         assert not any(name.endswith(".pem") for name in names)
