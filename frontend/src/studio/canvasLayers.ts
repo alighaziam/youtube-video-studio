@@ -2,7 +2,7 @@ import type { SceneLayer } from "./types";
 
 /**
  * Mirrors the encoder's two-plane composition: media layers are composited
- * first, then text/code/diagram ASS overlays are drawn above all media.
+ * first, then shape/text/code/diagram ASS overlays are drawn above all media.
  */
 export function orderPreviewLayers(layers: SceneLayer[]): SceneLayer[] {
   const visible = layers.filter((layer) => layer.visible);
