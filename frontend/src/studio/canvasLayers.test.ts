@@ -15,12 +15,13 @@ describe("orderPreviewLayers", () => {
       layer("code-middle", "code", 5),
       layer("video-middle", "video", 4),
       layer("hidden-image", "image", 0, false),
+      layer("shape", "shape", 6),
       layer("diagram", "diagram", 7),
     ]);
     expect(ordered.map((item) => item.id)).toEqual([
-      "image-bottom", "video-middle", "code-middle", "diagram", "text-top",
+      "image-bottom", "video-middle", "code-middle", "shape", "diagram", "text-top",
     ]);
-    expect(ordered.map((item) => item.zIndex)).toEqual([1, 2, 3, 4, 5]);
+    expect(ordered.map((item) => item.zIndex)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it("does not mutate the persisted layer records", () => {

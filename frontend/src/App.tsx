@@ -360,10 +360,11 @@ export default function App() {
     const count = (selected.layers ?? []).length;
     const layer: SceneLayer = {
       id: `layer-${crypto.randomUUID()}`, type,
-      name: type === "image" ? "Image layer" : type === "video" ? "Video layer" : type === "code" ? "Code layer" : type === "diagram" ? "Diagram layer" : "Text layer",
+      name: type === "image" ? "Image layer" : type === "video" ? "Video layer" : type === "code" ? "Code layer" : type === "diagram" ? "Diagram layer" : type === "shape" ? "Shape layer" : "Text layer",
       x: 12 + (count % 3) * 8, y: 16 + (count % 3) * 8, width: 42, height: 28,
       zIndex: count + 1, opacity: 1, visible: true,
       content: type === "code" ? "public void handle() {\n  // your code\n}" : type === "diagram" ? "CLIENT → API → DATA" : type === "text" ? "Your text" : undefined,
+      ...(type === "shape" ? { shapeKind: "rectangle" as const, fillColor: "#7187ff", strokeColor: "#dbeafe", strokeWidth: 2 } : {}),
     };
     updateSelected({ layers: [...(selected.layers ?? []), layer] });
   };
@@ -1069,6 +1070,11 @@ export default function App() {
               {layer.type==="text" && <span>{layer.content}</span>}
               {layer.type==="code" && <pre>{layer.content}</pre>}
               {layer.type==="diagram" && <span className="layer-diagram">{layer.content}</span>}
+              {layer.type==="shape" && <svg viewBox="0 0 100 100" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+                {(layer.shapeKind ?? "rectangle") === "ellipse"
+                  ? <ellipse cx="50" cy="50" rx="48" ry="48" fill={layer.fillColor ?? "#7187ff"} stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>
+                  : <rect x="1" y="1" width="98" height="98" rx="3" fill={layer.fillColor ?? "#7187ff"} stroke={layer.strokeColor ?? "#dbeafe"} strokeWidth={layer.strokeWidth ?? 2} vectorEffect="non-scaling-stroke"/>}
+              </svg>}
               <i className="layer-resize" onPointerDown={(event) => dragLayer(event, layer, "resize")} />
             </div>;
           })}

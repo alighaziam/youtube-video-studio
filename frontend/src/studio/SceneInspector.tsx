@@ -55,10 +55,17 @@ export function SceneInspector({
         <button type="button" onClick={()=>addLayer("diagram")}>＋ {fa?"دیاگرام":"Diagram"}</button>
         <button type="button" onClick={()=>addLayer("image")}>＋ {fa?"تصویر":"Image"}</button>
         <button type="button" onClick={()=>addLayer("video")}>＋ Video</button>
+        <button type="button" onClick={()=>addLayer("shape")}>＋ {fa ? "شکل" : "Shape"}</button>
       </div>
       {(selected?.layers ?? []).slice().sort((a,b)=>b.zIndex-a.zIndex).map(layer=><div className="canvas-layer-editor" key={layer.id}>
         <div className="canvas-layer-heading"><b>{layer.name}</b><span>Z {layer.zIndex}</span><button type="button" onClick={()=>moveLayer(layer.id,1)} title="Move forward">↑</button><button type="button" onClick={()=>moveLayer(layer.id,-1)} title="Move backward">↓</button><button type="button" onClick={()=>updateLayer(layer.id,{visible:!layer.visible})}>{layer.visible?"◉":"○"}</button><button type="button" onClick={()=>deleteLayer(layer.id)}>×</button></div>
         {(layer.type==="text" || layer.type==="code" || layer.type==="diagram") && <textarea className="field edit-field layer-content" dir="auto" value={layer.content ?? ""} onChange={event=>updateLayer(layer.id,{content:event.target.value})}/>}
+        {layer.type==="shape" && <div className="layer-shape-controls">
+          <label>{fa ? "نوع شکل" : "Shape type"}<select className="field edit-field" value={layer.shapeKind ?? "rectangle"} onChange={event=>updateLayer(layer.id,{shapeKind:event.target.value as "rectangle" | "ellipse"})}><option value="rectangle">{fa ? "مستطیل" : "Rectangle"}</option><option value="ellipse">{fa ? "بیضی" : "Ellipse"}</option></select></label>
+          <label>{fa ? "رنگ داخل" : "Fill color"}<input type="color" value={layer.fillColor ?? "#7187ff"} onChange={event=>updateLayer(layer.id,{fillColor:event.target.value})}/></label>
+          <label>{fa ? "رنگ حاشیه" : "Stroke color"}<input type="color" value={layer.strokeColor ?? "#dbeafe"} onChange={event=>updateLayer(layer.id,{strokeColor:event.target.value})}/></label>
+          <label>{fa ? "ضخامت حاشیه" : "Stroke width"}<input className="field edit-field" type="number" min="0" max="20" step="1" value={layer.strokeWidth ?? 2} onChange={event=>updateLayer(layer.id,{strokeWidth:Math.max(0,Math.min(20,Number(event.target.value)||0))})}/></label>
+        </div>}
         {(layer.type==="image" || layer.type==="video") && <select className="field edit-field" value={layer.assetId ?? ""} onChange={event=>updateLayer(layer.id,{assetId:event.target.value || undefined})}><option value="">{fa?"انتخاب فایل رسانه":"Choose media asset"}</option>{assets.filter(asset=>layer.type==="image"?asset.mime_type.startsWith("image/"):asset.mime_type.startsWith("video/")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select>}
         <div className="layer-transform-grid">
           <label>X % <input className="field edit-field" type="number" min="0" max="100" value={layer.x} onChange={event=>updateLayer(layer.id,{x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label>

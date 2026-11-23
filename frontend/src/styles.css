@@ -55,6 +55,26 @@
 .canvas-layer-heading span{font:8px monospace;color:#8795ae}
 .canvas-layer-heading button{padding:3px 6px}
 .layer-content{min-height:55px;resize:vertical;margin:4px 0}
+.layer-shape-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+.layer-shape-controls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.layer-shape-controls input[type="color"] {
+  width: 100%;
+  min-height: 34px;
+  padding: 2px;
+  border: 1px solid var(--line, #334155);
+  border-radius: 8px;
+  background: transparent;
+}
+
 .layer-transform-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .layer-transform-grid label{font-size:8px}
 .layer-transform-grid input{margin-top:4px}

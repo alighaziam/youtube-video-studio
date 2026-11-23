@@ -38,7 +38,7 @@ The primary workflow is Persian and English educational content for an internati
 
 ### Visual editor
 - Scene canvas with 16:9 and 9:16 preview.
-- Layers: text, image, video, shape, SVG, code block, diagram, caption, and audio.
+- Layers: text, image, video, editable rectangle/ellipse shapes, SVG, code block, diagram, caption, and audio.
 - Position, size, opacity, rotation, crop, z-order, and alignment guides.
 - Snap-to-grid, safe-area guides, undo/redo, copy/paste, duplicate.
 - Opt-in motion presets with explicit start/end values and easing.

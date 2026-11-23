@@ -41,8 +41,8 @@ Each phase has an exit gate. Do not start the next phase until current tests and
 - Gate: API tests cover backup/restore round-trip, media reference remapping, version snapshot/restore, and history cleanup; manual fresh-install project recovery remains to be checked.
 
 ## Phase 3 — Visual composition
-- Canvas, inspector, text/image/video/code/diagram layers, safe area, undo/redo, and explicit static/fade motion are implemented.
-- Pointer drag/resize with bounds and one-second timeline split/snap are implemented. Remaining: shapes/SVG layers and exact pixel parity for typography/video decoding.
+- Canvas, inspector, text/image/video/code/diagram layers, editable rectangle/ellipse shape layers, safe area, undo/redo, and explicit static/fade motion are implemented.
+- Pointer drag/resize with bounds and one-second timeline split/snap are implemented. Remaining: SVG layers and exact pixel parity for typography/video decoding.
 - Gate: reusable 5-scene explainer with matching preview/export.
 
 ## Phase 4 — Audio and captions

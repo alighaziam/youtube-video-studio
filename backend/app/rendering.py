@@ -136,7 +136,7 @@ def _normalize_scene_layers(raw_layers: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_layers, list):
         return []
     normalized: list[dict[str, Any]] = []
-    allowed = {"image", "video", "text", "code", "diagram"}
+    allowed = {"image", "video", "text", "code", "diagram", "shape"}
     for index, raw in enumerate(raw_layers[:24]):
         if not isinstance(raw, dict) or raw.get("type") not in allowed:
             continue
@@ -157,6 +157,10 @@ def _normalize_scene_layers(raw_layers: Any) -> list[dict[str, Any]]:
             "zIndex": int(number("zIndex", index + 1, 0, 1000)),
             "opacity": number("opacity", 1, 0, 1), "visible": bool(raw.get("visible", True)),
             "content": str(raw.get("content", ""))[:6000], "assetId": str(raw.get("assetId", ""))[:128],
+            "shapeKind": raw.get("shapeKind") if raw.get("shapeKind") in {"rectangle", "ellipse"} else "rectangle",
+            "fillColor": raw.get("fillColor") if isinstance(raw.get("fillColor"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", raw.get("fillColor", "")) else "#7187ff",
+            "strokeColor": raw.get("strokeColor") if isinstance(raw.get("strokeColor"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", raw.get("strokeColor", "")) else "#dbeafe",
+            "strokeWidth": number("strokeWidth", 2, 0, 20),
         })
     return sorted(normalized, key=lambda item: item["zIndex"])
 
@@ -196,6 +200,12 @@ def _ass_time(seconds: float) -> str:
 
 def _ass_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", r"\N")
+
+
+def _ass_bgr(value: str, fallback: str) -> str:
+    """Convert a validated #RRGGBB color to ASS's BGR channel order."""
+    color = value if re.fullmatch(r"#[0-9a-fA-F]{6}", value or "") else fallback
+    return color[5:7] + color[3:5] + color[1:3]
 
 
 def _infer_visual_spec(scene: dict[str, Any]) -> dict[str, Any]:
@@ -334,13 +344,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 override = chr(92) + "an5" + chr(92) + f"pos({x},{int(height * .5)})"
                 events.append(f"Dialogue: 2,{_ass_time(cursor)},{_ass_time(cursor + duration)},Diagram,,0,0,0,,{{{override}}}{label}")
         for layer in _normalize_scene_layers(scene.get("layers")):
-            if not layer["visible"] or layer["type"] not in {"text", "code", "diagram"}:
+            if not layer["visible"]:
+                continue
+            event_layer = 3 + min(20, layer["zIndex"])
+            if layer["type"] == "shape":
+                shape_width = max(1, int(width * layer["width"] / 100))
+                shape_height = max(1, int(height * layer["height"] / 100))
+                fill = _ass_bgr(layer["fillColor"], "#7187ff")
+                stroke = _ass_bgr(layer["strokeColor"], "#dbeafe")
+                alpha = round((1 - layer["opacity"]) * 255)
+                border = layer["strokeWidth"]
+                if layer["shapeKind"] == "ellipse":
+                    cx, cy = shape_width / 2, shape_height / 2
+                    kx, ky = cx * 0.55228475, cy * 0.55228475
+                    path = (f"m {cx:.2f} 0 b {cx+kx:.2f} 0 {shape_width:.2f} {cy-ky:.2f} {shape_width:.2f} {cy:.2f} "
+                            f"b {shape_width:.2f} {cy+ky:.2f} {cx+kx:.2f} {shape_height:.2f} {cx:.2f} {shape_height:.2f} "
+                            f"b {cx-kx:.2f} {shape_height:.2f} 0 {cy+ky:.2f} 0 {cy:.2f} "
+                            f"b 0 {cy-ky:.2f} {cx-kx:.2f} 0 {cx:.2f} 0")
+                else:
+                    path = f"m 0 0 l {shape_width} 0 l {shape_width} {shape_height} l 0 {shape_height} l 0 0"
+                x = int(width * layer["x"] / 100)
+                y = int(height * layer["y"] / 100)
+                slash = chr(92)
+                override = (slash + "an7" + slash + f"pos({x},{y})" + slash + "p1" + slash + f"bord{border:g}"
+                            + slash + "shad0" + slash + f"1c&H{fill}&" + slash + f"3c&H{stroke}&"
+                            + slash + f"1a&H{alpha:02X}&" + slash + f"3a&H{alpha:02X}&")
+                reset = slash + "p0"
+                events.append(f"Dialogue: {event_layer},{_ass_time(cursor)},{_ass_time(cursor + duration)},LayerText,,0,0,0,,{{{override}}}{path}{{{reset}}}")
+                continue
+            if layer["type"] not in {"text", "code", "diagram"}:
                 continue
             content = layer["content"].strip()
             if not content:
                 continue
             style = "LayerCode" if layer["type"] == "code" else "LayerText"
-            event_layer = 3 + min(20, layer["zIndex"])
             if layer["type"] == "diagram":
                 labels = _split_diagram_labels(content)
                 for node_index, label in enumerate(labels):
