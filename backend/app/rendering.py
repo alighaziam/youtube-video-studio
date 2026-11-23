@@ -366,7 +366,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 x = int(width * layer["x"] / 100)
                 y = int(height * layer["y"] / 100)
                 slash = chr(92)
-                override = (slash + "an7" + slash + f"pos({x},{y})" + slash + "p1" + slash + f"bord({border:g})"
+                override = (slash + "an7" + slash + f"pos({x},{y})" + slash + "p1" + slash + f"bord{border:g}"
                             + slash + "shad0" + slash + f"1c&H{fill}&" + slash + f"3c&H{stroke}&"
                             + slash + f"1a&H{alpha:02X}&" + slash + f"3a&H{alpha:02X}&")
                 reset = slash + "p0"
