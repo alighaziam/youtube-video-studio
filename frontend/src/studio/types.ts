@@ -1,7 +1,7 @@
 export type DiagramNode = { id: string; label: string; x: number; y: number };
 export type DiagramEdge = { label: string };
 export type SceneDiagram = { nodes: DiagramNode[]; edges: DiagramEdge[]; accentColor?: string };
-export type SceneLayer = { id: string; type: "image" | "video" | "text" | "code" | "diagram" | "shape"; name: string; x: number; y: number; width: number; height: number; zIndex: number; opacity: number; visible: boolean; content?: string; assetId?: string; shapeKind?: "rectangle" | "ellipse"; fillColor?: string; strokeColor?: string; strokeWidth?: number };
+export type SceneLayer = { id: string; type: "image" | "video" | "text" | "code" | "diagram" | "shape"; name: string; x: number; y: number; width: number; height: number; zIndex: number; opacity: number; visible: boolean; content?: string; assetId?: string; shapeKind?: "rectangle" | "ellipse" | "line" | "arrow"; fillColor?: string; strokeColor?: string; strokeWidth?: number };
 export type SceneMotion = "static" | "fade";
 export type Scene = { id: string; title: string; kind: string; duration: number; narration?: string; assetId?: string; voiceAssetId?: string; voiceDuration?: number; voiceTrimStart?: number; voiceTrimEnd?: number; voiceGain?: number; voiceFadeIn?: number; voiceFadeOut?: number; voiceNoiseReduction?: boolean; diagram?: SceneDiagram; layers?: SceneLayer[]; motion?: SceneMotion };
 export type Project = { id: string; title: string; document: { schemaVersion: number; scenes: Scene[]; [key: string]: unknown } };
