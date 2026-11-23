@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -39,6 +38,8 @@ def _is_release_file(path: Path, root: Path, output_dir: Path) -> bool:
         return False
     name = path.name.lower()
     if name in _EXCLUDED_NAMES:
+        return False
+    if name.startswith("youtube-video-studio-") and name.endswith("-source.zip"):
         return False
     if name.startswith(".env") and name not in _INCLUDED_ENV_EXAMPLES:
         return False
