@@ -33,7 +33,7 @@ def _make_repository(root: Path) -> None:
 def test_source_release_is_reproducible_and_excludes_local_secrets_and_runtime_data(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     _make_repository(root)
-    first = create_release_archive(root, tmp_path / "first")
+    first = create_release_archive(root, root / "release-out")
     second = create_release_archive(root, tmp_path / "second")
 
     assert first.read_bytes() == second.read_bytes()
@@ -45,6 +45,7 @@ def test_source_release_is_reproducible_and_excludes_local_secrets_and_runtime_d
         assert prefix + "scripts/run-dev.sh" in names
         assert prefix + ".env.example" in names
         assert prefix + "SHA256SUMS.txt" in names
+        assert not any("release-out/" in name for name in names)
         assert not any(".env" in name and not name.endswith(".env.example") for name in names)
         assert not any(".data/" in name or ".venv/" in name or "node_modules/" in name for name in names)
         assert not any(name.endswith(".pem") for name in names)
