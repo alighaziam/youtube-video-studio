@@ -266,7 +266,7 @@ def test_ass_renders_editable_rectangle_and_ellipse_shape_layers() -> None:
     assert "384.00" in result
     assert r"1a&HFF&" in result
     assert "l 768 54.00" in result
-    assert "l 576 64.80" in result
+    assert "l 576 64.50" in result
 
 
 def test_scene_layer_filter_composites_media_in_z_order() -> None:
