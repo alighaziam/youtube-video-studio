@@ -42,6 +42,42 @@ Fresh-machine Piper model execution; preview/export pixel parity and typography/
 This is a consistent engineering assessment baseline, not a claim that a single objectively exact percentage exists independent of the scoring rubric.
 
 
+## Evidence-based reassessment — 23 November 2026
+
+- Assessed commit: `eee8e260929dc634617055722e3d1a0c8ad47433` on `main`.
+- Overall weighted score: **90.35%**.
+
+| Dimension | Weight | Score | Weighted contribution |
+|---|---:|---:|---:|
+| Product capabilities | 40% | 90% | 36.00 |
+| Tests and code quality | 20% | 95% | 19.00 |
+| CI/CD and build | 15% | 100% | 15.00 |
+| Security | 10% | 85% | 8.50 |
+| Documentation | 5% | 97% | 4.85 |
+| Deployment / production readiness | 10% | 70% | 7.00 |
+| **Total** | **100%** | — | **90.35%** |
+
+The score crosses the 90% target under the same six-dimension weighted rubric. Product capabilities increased for the newly covered editable vector-shape workflows and safer render-cache lifecycle; tests/code quality increased for regression coverage including actual FFmpeg output; deployment readiness increased for reproducible source packaging and its CI artifact. CI/CD remains capped at 100%; security remains 85% because production credential handling and external publishing are still unverified. The source ZIP is not a self-contained binary installer.
+
+### Merged implementation evidence
+
+- PR [#33](https://github.com/alighaziam/youtube-video-studio/pull/33): clean up browser-recorded WebM audio when deleting a project; regression test covers both filesystem and database cleanup. Post-merge CI [45118466141](https://github.com/alighaziam/youtube-video-studio/actions/runs/45118466141) and CodeQL [45118466063](https://github.com/alighaziam/youtube-video-studio/actions/runs/45118466063) passed.
+- PR [#34](https://github.com/alighaziam/youtube-video-studio/pull/34): 30-day / 2 GiB LRU render-checkpoint retention and stale temporary-file cleanup; deterministic tests cover age and size eviction. PR-head CI [45118766024](https://github.com/alighaziam/youtube-video-studio/actions/runs/45118766024) and CodeQL [45118766165](https://github.com/alighaziam/youtube-video-studio/actions/runs/45118766165) passed.
+- PR [#35](https://github.com/alighaziam/youtube-video-studio/pull/35): deterministic source ZIP with SHA-256 manifest, secret/runtime exclusions, reproducibility tests, and CI artifact. PR-head CI [45119277968](https://github.com/alighaziam/youtube-video-studio/actions/runs/45119277968) and CodeQL [45119277880](https://github.com/alighaziam/youtube-video-studio/actions/runs/45119277880) passed.
+- PR [#37](https://github.com/alighaziam/youtube-video-studio/pull/37): editable rectangle and ellipse layers, preview/export rendering, inspector controls, validation, and real FFmpeg smoke coverage. PR-head CI [45119843476](https://github.com/alighaziam/youtube-video-studio/actions/runs/45119843476) and CodeQL [45119843465](https://github.com/alighaziam/youtube-video-studio/actions/runs/45119843465) passed.
+- PR [#38](https://github.com/alighaziam/youtube-video-studio/pull/38): line and arrow vector layers, preview/export rendering, and real FFmpeg coverage for all four shape types. Post-merge CI [45120487027](https://github.com/alighaziam/youtube-video-studio/actions/runs/45120487027) and CodeQL [45120487002](https://github.com/alighaziam/youtube-video-studio/actions/runs/45120487002) passed on the assessed main commit.
+
+### Remaining non-substitutable release gates
+
+- SVG import/layers and exact preview/export parity for typography and video decoding.
+- Phoneme-level caption alignment and accessibility/performance validation.
+- Fresh-machine manual Windows/Linux installation and actual Piper execution with a locally installed licensed voice model.
+- Real YouTube/LinkedIn upload remains unimplemented; publishing-pack export is not platform publishing.
+- The source archive is source-only and requires Python, Node/npm, FFmpeg, and optional local voice models. It is not an installer or a release deployment.
+- External services and production environments remain unverified.
+
+This repository is now above the portfolio's 90% target by the agreed weighted rubric, but the listed release gates remain open and must not be described as complete.
+
 ## Latest merged increment — 19 November 2026
 
 - PR #27 merged as `cc25f82eae095fe88e462c4a3f62aa914f493f57`.
